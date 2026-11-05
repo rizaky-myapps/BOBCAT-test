@@ -1,4 +1,4 @@
-const { ActivityType, Client, Events, GatewayIntentBits } = require('discord.js');
+const { Client, Events, GatewayIntentBits } = require('discord.js');
 const { config, assertConfig } = require('./config');
 
 assertConfig(['discord.token', 'channels.sessionAtm', 'mongo.uri']);
@@ -25,7 +25,6 @@ async function cacheGuildMembers(readyClient) {
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`[Discord] Connecté en tant que ${readyClient.user.tag}.`);
-  readyClient.user.setActivity('les ATM', { type: ActivityType.Watching });
   await deployCommands(readyClient);
   await cacheGuildMembers(readyClient);
   startJobs(readyClient);
