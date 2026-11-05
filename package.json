@@ -1,0 +1,31 @@
+{
+  "name": "bobcat-test",
+  "version": "1.0.0",
+  "description": "Bot Discord BOBCAT — sessions de ravitaillement d'ATM (discord.js v14, mongoose, Cloudinary)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "dev": "node --watch src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rizaky-myapps/BOBCAT-test.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rizaky-myapps/BOBCAT-test/issues"
+  },
+  "homepage": "https://github.com/rizaky-myapps/BOBCAT-test#readme",
+  "dependencies": {
+    "cloudinary": "^2.11.0",
+    "discord.js": "^14.28.1",
+    "dotenv": "^17.4.2",
+    "mongoose": "^9.12.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "private": true
+}
