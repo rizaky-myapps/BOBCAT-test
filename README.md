@@ -33,8 +33,7 @@ Remplis ensuite le fichier `.env` :
 | Variable | Obligatoire | Description |
 | --- | --- | --- |
 | `DISCORD_TOKEN` | ✅ | Token du bot |
-| `DISCORD_CLIENT_ID` | ✅ (déploiement) | ID de l'application Discord |
-| `DISCORD_GUILD_ID` | | Serveur où enregistrer `/atm` (instantané). Vide = commande globale |
+| `DISCORD_GUILD_ID` | | Serveur où `/atm` est enregistrée au démarrage (instantané). Vide = commande globale (jusqu'à 1h de propagation) |
 | `ATM_CHANNEL_ID` | ✅ | Salon où les sessions ATM sont publiées |
 | `ATM_PING_ROLE_ID` | | Rôle mentionné si « Ping employés ? » = OUI. Vide = `@everyone` |
 | `ATM_MANAGER_ROLE_IDS` | | Rôles (séparés par des virgules) autorisés à gérer **toutes** les sessions via ⚙️ |
@@ -43,17 +42,13 @@ Remplis ensuite le fichier `.env` :
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | | Identifiants Cloudinary. Sans eux, le bot fonctionne mais l'ajout de photos est désactivé |
 | `CLOUDINARY_FOLDER` | | Dossier Cloudinary (défaut : `bobcat/atm`) |
 
-Enregistre la commande slash `/atm` (à refaire uniquement si la commande change) :
-
-```bash
-npm run deploy
-```
-
 Lance le bot :
 
 ```bash
 npm start
 ```
+
+Au démarrage, le bot enregistre (ou met à jour) automatiquement la commande `/atm` auprès de Discord. Aucune étape de déploiement séparée n'est nécessaire.
 
 ### Permissions du bot
 
@@ -118,11 +113,11 @@ Chaque modification met immédiatement l'annonce à jour, sans renvoyer de ping.
 
 ```
 src/
-├── index.js                 # Démarrage du bot (client Discord + MongoDB)
-├── deploy-commands.js       # Enregistrement des commandes slash
+├── index.js                 # Démarrage du bot (MongoDB, client Discord, enregistrement des commandes)
 ├── config.js                # Lecture / validation du .env
 ├── commands/
 │   ├── index.js             # Liste des commandes
+│   ├── deploy.js            # Enregistrement des commandes slash (appelé au démarrage)
 │   └── atm.js               # /atm → ouvre le modal
 ├── interactions/
 │   ├── index.js             # Routage des commandes, boutons, menus et modals

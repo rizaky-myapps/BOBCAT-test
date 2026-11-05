@@ -5,12 +5,14 @@ assertConfig(['discord.token', 'atm.channelId', 'mongo.uri']);
 
 const { connectDatabase, disconnectDatabase } = require('./database/mongoose');
 const { handleInteraction } = require('./interactions');
+const { deployCommands } = require('./commands/deploy');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`[Discord] Connecté en tant que ${readyClient.user.tag}.`);
   readyClient.user.setActivity('les ATM', { type: ActivityType.Watching });
+  await deployCommands(readyClient);
 });
 
 client.on(Events.InteractionCreate, handleInteraction);

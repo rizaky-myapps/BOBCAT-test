@@ -33,29 +33,44 @@ const DATE_PLACEHOLDER = 'JJ/MM/AAAA HH:MM (ex : 31/10/2026 21:00)';
 
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
+/**
+ * Pré-remplit un champ texte uniquement si la valeur respecte ses limites :
+ * Discord refuse le modal entier si la valeur est vide ou hors limites
+ * (ex : "" sur un champ avec une longueur minimale).
+ */
+function prefill(input, value) {
+  const { min_length: min = 0, max_length: max = 4000 } = input.data;
+  if (value && value.length >= Math.max(min, 1) && value.length <= max) input.setValue(value);
+  return input;
+}
+
 const dateLabel = (value) =>
   new LabelBuilder()
     .setLabel('Date & Heure')
     .setDescription('Format : JJ/MM/AAAA HH:MM')
     .setTextInputComponent(
-      new TextInputBuilder()
-        .setCustomId(FIELDS.date)
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder(DATE_PLACEHOLDER)
-        .setMinLength(10)
-        .setMaxLength(20)
-        .setRequired(true)
-        .setValue(value ?? ''),
+      prefill(
+        new TextInputBuilder()
+          .setCustomId(FIELDS.date)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder(DATE_PLACEHOLDER)
+          .setMinLength(10)
+          .setMaxLength(20)
+          .setRequired(true),
+        value,
+      ),
     );
 
 const vehicleOtherInput = (value, required) =>
-  new TextInputBuilder()
-    .setCustomId(FIELDS.vehicleOther)
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Ex : XYZ 789')
-    .setMaxLength(32)
-    .setRequired(required)
-    .setValue(value ?? '');
+  prefill(
+    new TextInputBuilder()
+      .setCustomId(FIELDS.vehicleOther)
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Ex : XYZ 789')
+      .setMaxLength(32)
+      .setRequired(required),
+    value,
+  );
 
 const selectLabel = (label, customId, choices, placeholder, selected) =>
   new LabelBuilder()
