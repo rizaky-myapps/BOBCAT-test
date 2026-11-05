@@ -2,8 +2,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
   MessageFlags,
   SectionBuilder,
   TextDisplayBuilder,
@@ -80,28 +78,21 @@ function buildMainText(data) {
 
 /**
  * Container principal (texte + bouton ⚙️ en haut à droite), partagé par le message et l'aperçu.
- * @param {Parameters<typeof buildMainText>[0] & { photos?: { url: string }[] }} data
- * @param {string} manageCustomId custom_id du bouton ⚙️
+ * @param {Parameters<typeof buildMainText>[0]} data
+ * @param {{ manageCustomId: string, manageDisabled?: boolean }} manage custom_id et état du bouton ⚙️
  */
-function buildMainContainer(data, manageCustomId) {
-  const container = new ContainerBuilder().addSectionComponents(
+function buildMainContainer(data, { manageCustomId, manageDisabled = false }) {
+  return new ContainerBuilder().addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildMainText(data)))
       .setButtonAccessory(
-        new ButtonBuilder().setCustomId(manageCustomId).setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+        new ButtonBuilder()
+          .setCustomId(manageCustomId)
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('⚙️')
+          .setDisabled(manageDisabled),
       ),
   );
-
-  if (data.photos?.length) {
-    container
-      .addSeparatorComponents(separator())
-      .addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          data.photos.map((photo) => new MediaGalleryItemBuilder().setURL(photo.url)),
-        ),
-      );
-  }
-  return container;
 }
 
 /**
@@ -154,7 +145,7 @@ function renderSessionMessage(session) {
 
   return {
     flags: MessageFlags.IsComponentsV2,
-    components: [separator(), buildMainContainer(session, `atm:manage:${id}`), availableContainer, separator()],
+    components: [separator(), buildMainContainer(session, { manageCustomId: `atm:manage:${id}` }), availableContainer, separator()],
     allowedMentions: buildAllowedMentions(session),
   };
 }

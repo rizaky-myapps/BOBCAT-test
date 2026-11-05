@@ -22,4 +22,4 @@ const atmDraftSchema = new Schema({
   createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 },
 });
 
-module.exports = model('AtmDraft', atmDraftSchema);
+module.exports = model('Sessions-ATM-Draft', atmDraftSchema, 'Sessions-ATM-Draft');

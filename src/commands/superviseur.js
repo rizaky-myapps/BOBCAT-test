@@ -13,17 +13,17 @@ module.exports = {
     .setDescription('Choisir les superviseurs proposés dans /atm')
     .setContexts(InteractionContextType.Guild),
 
-  /** Ouvre un modal listant les membres ayant le rôle superviseur défini dans le .env. */
+  /** Ouvre un modal listant les membres ayant le rôle CO ATM défini dans le .env. */
   async execute(interaction) {
-    const roleId = config.atm.supervisorRoleId;
+    const roleId = config.roles.coAtm;
     if (!roleId) {
       return interaction.reply(
-        ephemeralText("❌ Le rôle superviseur n'est pas configuré (`ATM_SUPERVISOR_ROLE_ID` dans le .env)."),
+        ephemeralText("❌ Le rôle CO ATM n'est pas configuré (`BOBCAT_CO_ATM_ROLE_ID` dans le .env)."),
       );
     }
 
     const role = interaction.guild.roles.cache.get(roleId);
-    if (!role) return interaction.reply(ephemeralText('❌ Le rôle superviseur configuré est introuvable sur ce serveur.'));
+    if (!role) return interaction.reply(ephemeralText('❌ Le rôle CO ATM configuré est introuvable sur ce serveur.'));
 
     const current = await Supervisor.find({ guildId: interaction.guildId });
     const currentIds = new Set(current.map((supervisor) => supervisor.userId));

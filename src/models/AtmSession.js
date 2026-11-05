@@ -4,19 +4,8 @@ const { STATUSES, AGENT_ROLES } = require('../atm/constants');
 const dispatchAgentSchema = new Schema(
   {
     userId: { type: String, required: true },
-    /** Nom affiché au moment de la sélection (sert uniquement de libellé dans les modals). */
-    name: { type: String, default: '' },
+    /** Logos affichés à côté de l'agent (cf. « Légende » du message). */
     roles: [{ type: String, enum: AGENT_ROLES.map((role) => role.value) }],
-  },
-  { _id: false },
-);
-
-const photoSchema = new Schema(
-  {
-    url: { type: String, required: true },
-    publicId: { type: String, required: true },
-    uploadedBy: { type: String, required: true },
-    uploadedAt: { type: Date, default: Date.now },
   },
   { _id: false },
 );
@@ -39,12 +28,10 @@ const atmSessionSchema = new Schema(
     status: { type: String, enum: STATUSES.map((status) => status.value), default: 'pending' },
     /** Agents ayant cliqué sur « Je suis disponible ». */
     available: [{ type: String }],
-    /** Agents retenus sur le dispatch par le gestionnaire de la session. */
+    /** Agents sur dispatch : n°1 le créateur, n°2 le superviseur (s'il y en a un), n°3 et n°4 définis plus tard. */
     dispatch: [dispatchAgentSchema],
-    /** Photos de la session hébergées sur Cloudinary. */
-    photos: [photoSchema],
   },
   { timestamps: true },
 );
 
-module.exports = model('AtmSession', atmSessionSchema);
+module.exports = model('Sessions-ATM', atmSessionSchema, 'Sessions-ATM');

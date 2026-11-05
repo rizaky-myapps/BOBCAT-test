@@ -1,32 +1,49 @@
 require('dotenv').config({ quiet: true });
 
-const splitIds = (value) =>
-  (value ?? '')
-    .split(',')
-    .map((id) => id.trim())
-    .filter(Boolean);
+const env = (key) => process.env[key] || null;
 
 const config = {
   discord: {
-    token: process.env.DISCORD_TOKEN,
-    guildId: process.env.DISCORD_GUILD_ID || null,
+    token: env('BOBCAT_DISCORD_BOT_TOKEN'),
+    guildId: env('BOBCAT_GUILD_ID'),
   },
-  atm: {
-    channelId: process.env.ATM_CHANNEL_ID,
-    pingRoleId: process.env.ATM_PING_ROLE_ID || null,
-    supervisorRoleId: process.env.ATM_SUPERVISOR_ROLE_ID || null,
-    managerRoleIds: splitIds(process.env.ATM_MANAGER_ROLE_IDS),
-    timezone: process.env.TIMEZONE || 'Europe/Paris',
+  roles: {
+    // Grades
+    direction: env('BOBCAT_DIRECTION_ROLE_ID'),
+    coAtm: env('BOBCAT_CO_ATM_ROLE_ID'),
+    employees: env('BOBCAT_EMPLOYEES_ROLE_ID'),
+    // Spécialisations
+    unite2Roues: env('BOBCAT_UNITE_2_ROUES_ROLE_ID'),
+    uniteK9: env('BOBCAT_UNITE_K9_ROLE_ID'),
+    recruteur: env('BOBCAT_RECRUTEUR_ROLE_ID'),
+    formateur: env('BOBCAT_FORMATEUR_ROLE_ID'),
+    // Habilitations
+    fusilAPompe: env('BOBCAT_FUSIL_A_POMPE_ROLE_ID'),
+    fusilAntiEmeute: env('BOBCAT_FUSIL_ANTI_EMEUTE_ROLE_ID'),
+  },
+  channels: {
+    sessionAtm: env('BOBCAT_SESSION_ATM_CHANNEL_ID'),
+    pdsAtm: env('BOBCAT_PDS_ATM_CHANNEL_ID'),
+    pdsPatrouille: env('BOBCAT_PDS_PATROUILLE_CHANNEL_ID'),
   },
   mongo: {
-    uri: process.env.MONGODB_URI,
+    uri: env('MONGODB_URI'),
+    dbName: env('MONGODB_FOLDER'),
   },
   cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
-    apiSecret: process.env.CLOUDINARY_API_SECRET,
-    folder: process.env.CLOUDINARY_FOLDER || 'bobcat/atm',
+    cloudName: env('CLOUDINARY_CLOUD_NAME'),
+    apiKey: env('CLOUDINARY_API_KEY'),
+    apiSecret: env('CLOUDINARY_API_SECRET'),
+    folder: env('CLOUDINARY_FOLDER') || 'bobcat-test/atm',
   },
+  timezone: env('TIMEZONE') || 'Europe/Paris',
+};
+
+/** Nom de la variable du .env correspondant à chaque clé obligatoire (pour les messages d'erreur). */
+const ENV_NAMES = {
+  'discord.token': 'BOBCAT_DISCORD_BOT_TOKEN',
+  'channels.sessionAtm': 'BOBCAT_SESSION_ATM_CHANNEL_ID',
+  'mongo.uri': 'MONGODB_URI',
 };
 
 /**
@@ -36,7 +53,7 @@ const config = {
 function assertConfig(keys) {
   const missing = keys.filter((key) => !key.split('.').reduce((obj, part) => obj?.[part], config));
   if (missing.length) {
-    throw new Error(`Configuration manquante dans le fichier .env : ${missing.join(', ')}`);
+    throw new Error(`Configuration manquante dans le fichier .env : ${missing.map((k) => ENV_NAMES[k] ?? k).join(', ')}`);
   }
 }
 

@@ -8,10 +8,14 @@ module.exports = {
     .setDescription("Créer une session de ravitaillement d'ATM")
     .setContexts(InteractionContextType.Guild),
 
-  /** Envoie l'aperçu (éphémère) du message de session, configurable via ses boutons. */
+  /**
+   * Envoie l'aperçu (éphémère) du message de session, configurable via ses boutons.
+   * Si l'utilisateur a déjà un brouillon, il est réutilisé.
+   */
   async execute(interaction) {
-    const draft = await AtmDraft.create({ guildId: interaction.guildId, userId: interaction.user.id });
-    const preview = renderPreview(draft);
+    const owner = { guildId: interaction.guildId, userId: interaction.user.id };
+    const draft = (await AtmDraft.findOne(owner).sort({ createdAt: -1 })) ?? (await AtmDraft.create(owner));
+    const preview = renderPreview(draft, interaction.guild);
     await interaction.reply({ ...preview, flags: preview.flags | MessageFlags.Ephemeral });
   },
 };

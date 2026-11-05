@@ -22,11 +22,11 @@ async function handleAvailableButton(interaction, [id]) {
   );
   const joined = Boolean(updated);
 
-  // … sinon on le retire (des disponibles et du dispatch).
+  // … sinon on le retire de la liste.
   if (!joined) {
     updated = await AtmSession.findByIdAndUpdate(
       session._id,
-      { $pull: { available: userId, dispatch: { userId } } },
+      { $pull: { available: userId } },
       { returnDocument: 'after' },
     );
   }
@@ -41,8 +41,13 @@ async function handleAvailableButton(interaction, [id]) {
   );
 }
 
-/** Bouton ⚙️ (en haut à droite du message). */
-async function handleManageButton(interaction) {
+/** Bouton ⚙️ (en haut à droite du message) : réservé au créateur de la session. */
+async function handleManageButton(interaction, [id]) {
+  const session = await findSession(id);
+  if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
+  if (session.creatorId !== interaction.user.id) {
+    return interaction.reply(ephemeralText('⛔ Seul le créateur de la session peut la modifier.'));
+  }
   return interaction.reply(ephemeralText('🚧 En développement'));
 }
 

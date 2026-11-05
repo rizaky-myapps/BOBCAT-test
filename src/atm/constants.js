@@ -46,10 +46,6 @@ const AGENT_ROLES = [
 
 /** Nombre de lignes affichées au minimum dans « Agents sur dispatch ». */
 const DISPATCH_MIN_LINES = 4;
-/** Nombre maximum d'agents sur dispatch (5 = limite de champs d'un modal Discord). */
-const DISPATCH_MAX = 5;
-/** Nombre maximum de photos par session (limite d'une galerie média Discord). */
-const MAX_PHOTOS = 10;
 
 const findLabel = (list, value) => list.find((item) => item.value === value)?.label ?? value;
 
@@ -62,7 +58,5 @@ module.exports = {
   CLOSED_STATUSES,
   AGENT_ROLES,
   DISPATCH_MIN_LINES,
-  DISPATCH_MAX,
-  MAX_PHOTOS,
   findLabel,
 };

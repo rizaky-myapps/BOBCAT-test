@@ -4,7 +4,7 @@ const commands = require('./index');
 /**
  * Enregistre (ou met à jour) les commandes slash auprès de Discord.
  * Appelé automatiquement au démarrage du bot, une fois le client connecté.
- * - DISCORD_GUILD_ID renseigné : commandes du serveur (disponibles immédiatement)
+ * - BOBCAT_GUILD_ID renseigné : commandes du serveur (disponibles immédiatement)
  * - sinon : commandes globales (propagation jusqu'à 1h)
  * @param {import('discord.js').Client<true>} client
  */

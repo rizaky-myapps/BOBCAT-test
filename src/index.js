@@ -1,7 +1,7 @@
 const { ActivityType, Client, Events, GatewayIntentBits } = require('discord.js');
 const { config, assertConfig } = require('./config');
 
-assertConfig(['discord.token', 'atm.channelId', 'mongo.uri']);
+assertConfig(['discord.token', 'channels.sessionAtm', 'mongo.uri']);
 
 const { connectDatabase, disconnectDatabase } = require('./database/mongoose');
 const { handleInteraction } = require('./interactions');
@@ -44,7 +44,7 @@ process.on('unhandledRejection', (error) => console.error('[Bot] Promesse rejetÃ
 
 (async () => {
   try {
-    await connectDatabase(config.mongo.uri);
+    await connectDatabase(config.mongo.uri, config.mongo.dbName);
     await client.login(config.discord.token);
   } catch (error) {
     console.error('[Bot] DÃ©marrage impossible :', error);

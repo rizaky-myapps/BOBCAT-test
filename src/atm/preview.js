@@ -1,7 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, MessageFlags } = require('discord.js');
 const { VEHICLE_OTHER } = require('./constants');
 const { buildMainContainer } = require('./message');
-const { getPingMention, resolveVehicle } = require('./service');
+const { buildDispatch, getPingMention, resolveVehicle } = require('./service');
 const { separator } = require('../utils/v2');
 
 /** Toutes les informations nécessaires à l'envoi sont-elles renseignées ? */
@@ -13,10 +13,11 @@ function isDraftComplete(draft) {
 
 /**
  * Aperçu (éphémère) du message qui sera envoyé par /atm.
- * La liste des agents est remplacée par les boutons de configuration.
+ * La liste des agents disponibles est remplacée par les boutons de configuration.
  * @param {import('../models/AtmDraft')} draft
+ * @param {import('discord.js').Guild} guild Serveur (pour les logos des agents sur dispatch)
  */
-function renderPreview(draft) {
+function renderPreview(draft, guild) {
   const id = draft._id.toString();
 
   const main = buildMainContainer(
@@ -28,9 +29,9 @@ function renderPreview(draft) {
       supervisorId: draft.supervisorId,
       pingMention: draft.ping ? getPingMention() : null,
       status: 'pending',
-      dispatch: [],
+      dispatch: buildDispatch(guild, draft.userId, draft.supervisorId),
     },
-    'atm:manage:preview',
+    { manageCustomId: 'atm:manage:preview', manageDisabled: true },
   );
 
   const buttons = [

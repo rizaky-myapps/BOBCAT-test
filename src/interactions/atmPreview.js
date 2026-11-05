@@ -11,10 +11,17 @@ const { ephemeralText, textMessage } = require('../utils/v2');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
 
-/** Charge le brouillon de l'aperçu ; prévient l'utilisateur s'il a expiré. */
+/** Charge le brouillon de l'aperçu ; seul son créateur peut le modifier. */
 async function loadDraft(interaction, id) {
   const draft = isValidObjectId(id) ? await AtmDraft.findById(id) : null;
-  if (!draft) await interaction.reply(ephemeralText('❌ Cet aperçu a expiré. Relance la commande `/atm`.'));
+  if (!draft) {
+    await interaction.reply(ephemeralText('❌ Cet aperçu a expiré. Relance la commande `/atm`.'));
+    return null;
+  }
+  if (draft.userId !== interaction.user.id) {
+    await interaction.reply(ephemeralText('⛔ Seul le créateur de la session peut la modifier.'));
+    return null;
+  }
   return draft;
 }
 
@@ -59,11 +66,11 @@ async function handleInfoModal(interaction, [id]) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
 
-  const scheduledAt = parseDateTime(rawDate, config.atm.timezone);
+  const scheduledAt = parseDateTime(rawDate, config.timezone);
   draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
   await draft.save();
 
-  await interaction.update(renderPreview(draft));
+  await interaction.update(renderPreview(draft, interaction.guild));
   if (!scheduledAt) {
     await interaction.followUp(
       ephemeralText(
@@ -89,7 +96,7 @@ async function handlePlateModal(interaction, [id]) {
 
   draft.plate = interaction.fields.getTextInputValue(FIELDS.vehicleOther).trim();
   await draft.save();
-  return interaction.update(renderPreview(draft));
+  return interaction.update(renderPreview(draft, interaction.guild));
 }
 
 /* ------------------------------------------------------------------ */
@@ -102,7 +109,7 @@ async function handlePingButton(interaction, [id]) {
 
   draft.ping = !draft.ping;
   await draft.save();
-  return interaction.update(renderPreview(draft));
+  return interaction.update(renderPreview(draft, interaction.guild));
 }
 
 /* ------------------------------------------------------------------ */

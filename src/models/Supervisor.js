@@ -13,4 +13,4 @@ const supervisorSchema = new Schema(
 
 supervisorSchema.index({ guildId: 1, userId: 1 }, { unique: true });
 
-module.exports = model('Supervisor', supervisorSchema);
+module.exports = model('Superviseur-List', supervisorSchema, 'Superviseur-List');

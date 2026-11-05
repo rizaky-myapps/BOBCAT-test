@@ -1,13 +1,11 @@
 const {
-  FileUploadBuilder,
   LabelBuilder,
   ModalBuilder,
   StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { AGENT_ROLES, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('./constants');
-const { formatDateTime } = require('../utils/date');
+const { RADIOS, TENUES, VEHICLES } = require('./constants');
 
 /** Identifiants des champs des modals. */
 const FIELDS = {
@@ -18,8 +16,6 @@ const FIELDS = {
   vehicleOther: 'vehicule_autre',
   supervisor: 'superviseur',
   supervisors: 'superviseurs',
-  photos: 'photos',
-  rolePrefix: 'role_',
 };
 
 const DATE_PLACEHOLDER = 'JJ/MM/AAAA HH:MM (ex : 31/10/2026 21:00)';
@@ -145,85 +141,10 @@ function buildSupervisorModal(options, roleName) {
     );
 }
 
-/** Modal « Modifier les infos » (bouton du panneau ⚙️). */
-function buildEditModal(session, timeZone) {
-  const presetVehicle = VEHICLES.find((v) => v.value !== VEHICLE_OTHER && v.label === session.vehicle);
-
-  return new ModalBuilder()
-    .setCustomId(`atm:editsub:${session._id}`)
-    .setTitle('Modifier la session ATM')
-    .addLabelComponents(
-      dateLabel(formatDateTime(session.scheduledAt, timeZone)),
-      selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', session.tenue),
-      selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', session.radio),
-      selectLabel(
-        'Choix du véhicule',
-        FIELDS.vehicle,
-        VEHICLES,
-        'Sélectionne le véhicule',
-        presetVehicle?.value ?? VEHICLE_OTHER,
-      ),
-      new LabelBuilder()
-        .setLabel('Véhicule (si « Autre »)')
-        .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')
-        .setTextInputComponent(vehicleOtherInput(presetVehicle ? '' : session.vehicle, false)),
-    );
-}
-
-/** Modal « Rôles des agents » : un menu de rôles par agent sur dispatch. */
-function buildRolesModal(session) {
-  return new ModalBuilder()
-    .setCustomId(`atm:rolessub:${session._id}`)
-    .setTitle('Rôles des agents sur dispatch')
-    .addLabelComponents(
-      session.dispatch.map((agent) =>
-        new LabelBuilder().setLabel(truncate(agent.name || `Agent ${agent.userId}`, 45)).setStringSelectMenuComponent(
-          new StringSelectMenuBuilder()
-            .setCustomId(`${FIELDS.rolePrefix}${agent.userId}`)
-            .setPlaceholder('Aucun rôle')
-            .setRequired(false)
-            .setMinValues(0)
-            .setMaxValues(AGENT_ROLES.length)
-            .addOptions(
-              AGENT_ROLES.map((role) => ({
-                label: role.label,
-                value: role.value,
-                emoji: role.emoji,
-                default: agent.roles.includes(role.value),
-              })),
-            ),
-        ),
-      ),
-    );
-}
-
-/** Modal « Ajouter des photos » (upload vers Cloudinary). */
-function buildPhotoModal(session, remaining) {
-  return new ModalBuilder()
-    .setCustomId(`atm:photosub:${session._id}`)
-    .setTitle('Ajouter des photos')
-    .addLabelComponents(
-      new LabelBuilder()
-        .setLabel('Photos de la session')
-        .setDescription(`Images uniquement — ${remaining} maximum.`)
-        .setFileUploadComponent(
-          new FileUploadBuilder()
-            .setCustomId(FIELDS.photos)
-            .setFileTypes('image')
-            .setMinValues(1)
-            .setMaxValues(remaining)
-            .setRequired(true),
-        ),
-    );
-}
-
 module.exports = {
   FIELDS,
   truncate,
   buildInfoModal,
   buildPlateModal,
   buildSupervisorModal,
-  buildEditModal,
-  buildRolesModal,
-  buildPhotoModal,
 };

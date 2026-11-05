@@ -6,7 +6,7 @@ const { ephemeralText } = require('../utils/v2');
 /** Soumission du modal /superviseur : la sélection devient la liste des superviseurs en base. */
 async function handleSupervisorModal(interaction) {
   const { guild, guildId } = interaction;
-  const roleId = config.atm.supervisorRoleId;
+  const roleId = config.roles.coAtm;
   const selected = interaction.fields.fields.get(FIELDS.supervisors)?.values ?? [];
 
   const members = selected
