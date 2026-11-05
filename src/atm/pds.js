@@ -83,6 +83,9 @@ function renderPdsMessage(pds, session) {
   return { flags: MessageFlags.IsComponentsV2, components: [container], allowedMentions: { parse: [] } };
 }
 
+/** Photos des PDS : rognées au format 1:1, centrées (la croix de la carte reste au centre), sans redimensionnement. */
+const squareCrop = (attachment) => ({ squareCrop: true, width: attachment.width, height: attachment.height });
+
 async function fetchPdsChannel(client) {
   const channelId = config.channels.pdsAtm;
   if (!channelId) throw new Error("le salon des PDS ATM n'est pas configuré (`BOBCAT_PDS_ATM_CHANNEL_ID` dans le .env)");
@@ -100,7 +103,7 @@ async function fetchPdsChannel(client) {
  */
 async function createPds(interaction, session, { mallettes, attachment }) {
   const channel = await fetchPdsChannel(interaction.client);
-  const image = await uploadImageFromUrl(attachment.url, `pds/${session._id}`);
+  const image = await uploadImageFromUrl(attachment.url, `pds/${session._id}`, squareCrop(attachment));
   const key = dayKey(session.scheduledAt, config.timezone);
 
   let pds = null;
@@ -136,7 +139,7 @@ async function createPds(interaction, session, { mallettes, attachment }) {
 
 /** Remplace la photo d'une PDS (l'ancienne est supprimée de Cloudinary). */
 async function replacePdsImage(pds, attachment) {
-  const image = await uploadImageFromUrl(attachment.url, `pds/${pds.sessionId}`);
+  const image = await uploadImageFromUrl(attachment.url, `pds/${pds.sessionId}`, squareCrop(attachment));
   const previous = pds.image.publicId;
   pds.image = image;
   await deleteImage(previous).catch((error) => console.error('[Cloudinary] Suppression impossible :', error));
