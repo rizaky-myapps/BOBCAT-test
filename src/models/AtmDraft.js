@@ -6,7 +6,7 @@ const supervisorRequestSchema = new Schema(
     /** Identifiant de la demande (repris dans les boutons du message CO-ATM). */
     id: { type: String, required: true },
     supervisorId: { type: String, required: true },
-    status: { type: String, enum: ['pending', 'accepted', 'refused', 'expired', 'cancelled'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'accepted', 'refused', 'expired'], default: 'pending' },
     channelId: { type: String, default: null },
     messageId: { type: String, default: null },
     /** Au-delà, sans réponse, la demande est considérée comme refusée. */

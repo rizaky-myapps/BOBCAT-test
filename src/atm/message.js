@@ -44,7 +44,7 @@ function formatAvailableLines(available) {
 /**
  * Texte principal de la session.
  * @param {{ scheduledAt?: Date|null, radio?: string|null, tenue?: string|null, vehicle?: string|null,
- *   supervisorId?: string|null, pingMention?: string|null, status: string, dispatch: object[] }} data
+ *   pingMention?: string|null, status: string, dispatch: object[] }} data
  */
 function buildMainText(data) {
   const ts = data.scheduledAt ? toUnix(data.scheduledAt) : null;
@@ -68,7 +68,6 @@ function buildMainText(data) {
     `> **Radio :** ${code(radio)}`,
     `> **Tenue :** ${code(tenue)}`,
     `> **Véhicule :** ${code(data.vehicle)}`,
-    `> **Superviseur :** ${data.supervisorId ? `<@${data.supervisorId}>` : EMPTY}`,
     `> **Statut :** ${code(findLabel(STATUSES, data.status))}`,
     '',
     '- **__Légende :__**',
@@ -96,14 +95,13 @@ function buildMainContainer(data, { manageCustomId, manageDisabled = false }) {
 }
 
 /**
- * Mentions autorisées : les personnes affichées dans le message (superviseur, dispatch,
- * disponibles) et le rôle / @everyone du ping s'il est activé.
+ * Mentions autorisées : les personnes affichées dans le message (dispatch, disponibles)
+ * et le rôle / @everyone du ping s'il est activé.
  */
 function buildAllowedMentions(session) {
   const users = [
     ...new Set(
       [
-        session.supervisorId,
         ...session.dispatch.map((agent) => agent.userId),
         ...session.available.slice(0, MAX_AVAILABLE_SHOWN),
       ].filter(Boolean),

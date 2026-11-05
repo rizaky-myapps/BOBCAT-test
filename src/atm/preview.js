@@ -41,7 +41,6 @@ function renderPreview(draft, guild) {
       radio: draft.radio,
       tenue: draft.tenue,
       vehicle: draft.vehicle ? resolveVehicle(draft.vehicle, draft.plate) : null,
-      supervisorId,
       pingMention: draft.ping ? getPingMention() : null,
       status: 'pending',
       dispatch: buildDispatch(guild, draft.userId, supervisorId),

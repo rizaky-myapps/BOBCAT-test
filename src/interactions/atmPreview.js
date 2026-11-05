@@ -5,8 +5,8 @@ const { config } = require('../config');
 const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
 const { FIELDS, buildInfoModal, buildPlateModal, truncate } = require('../atm/modals');
 const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
-const { isCoAtm, publishSession } = require('../atm/service');
-const { rememberPreview, sendSupervisionRequest, updateRequestMessage } = require('../atm/supervision');
+const { getConfirmedSupervisorId, isCoAtm, publishSession } = require('../atm/service');
+const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
 const { parseDateTime } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 
@@ -53,9 +53,10 @@ async function handleInfoButton(interaction, [id]) {
   if (!draft) return;
   if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
 
-  // Le choix du superviseur n'est proposé qu'aux membres sans le rôle CO ATM.
+  // Le choix du superviseur n'est proposé qu'aux membres sans le rôle CO ATM,
+  // et plus du tout une fois que le superviseur a validé sa présence.
   let supervisors = null;
-  if (!isCoAtm(interaction.member)) {
+  if (!isCoAtm(interaction.member) && !getConfirmedSupervisorId(draft)) {
     supervisors = await getSupervisorChoices(interaction.guild);
     if (!supervisors.length) {
       return interaction.reply(
@@ -76,33 +77,28 @@ async function handleInfoModal(interaction, [id]) {
   const [tenue] = fields.getStringSelectValues(FIELDS.tenue);
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
-  const withSupervisor = !isCoAtm(interaction.member);
-  const supervisorId =
-    withSupervisor && fields.fields.has(FIELDS.supervisor) ? fields.getStringSelectValues(FIELDS.supervisor)[0] : null;
+  const coAtm = isCoAtm(interaction.member);
+  // Superviseur ayant validé sa présence : il ne peut plus être changé.
+  const accepted = !coAtm && Boolean(getConfirmedSupervisorId(draft));
+  const askSupervisor = !coAtm && !accepted;
+  let supervisorId = accepted ? draft.supervisorId : null;
+  if (askSupervisor && fields.fields.has(FIELDS.supervisor)) supervisorId = fields.getStringSelectValues(FIELDS.supervisor)[0];
 
-  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle) || (withSupervisor && !supervisorId)) {
+  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle) || (askSupervisor && !supervisorId)) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
 
   const scheduledAt = parseDateTime(rawDate, config.timezone);
-  const previous = draft.supervisorRequest;
-  // Une présence déjà validée reste valable tant que le même superviseur est choisi.
-  const keepRequest = Boolean(supervisorId && previous?.status === 'accepted' && previous.supervisorId === supervisorId);
-
-  if (!keepRequest && previous?.status === 'accepted') {
-    await updateRequestMessage(interaction.client, draft, { ...previous.toObject(), status: 'cancelled' });
-  }
-
   draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
-  if (!keepRequest) draft.supervisorRequest = null;
+  if (!accepted) draft.supervisorRequest = null;
 
   const notices = [];
   if (!scheduledAt) {
     notices.push(
       `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
     );
-    if (supervisorId) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
-  } else if (supervisorId && !keepRequest) {
+    if (askSupervisor) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
+  } else if (askSupervisor) {
     try {
       draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
       notices.push(

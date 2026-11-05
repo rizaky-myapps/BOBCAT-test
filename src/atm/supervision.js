@@ -23,7 +23,6 @@ const STATUS_LINES = {
   accepted: '✅ **Présence validée.**',
   refused: '❌ **Indisponible.**',
   expired: '⌛ **Pas de réponse dans les 10 minutes : demande refusée.**',
-  cancelled: '🚫 **Demande annulée** (superviseur changé).',
 };
 
 /**
@@ -202,7 +201,6 @@ async function expirePendingRequests(client) {
 module.exports = {
   renderSupervisionRequest,
   sendSupervisionRequest,
-  updateRequestMessage,
   rememberPreview,
   resolveRequest,
   notifyResolution,

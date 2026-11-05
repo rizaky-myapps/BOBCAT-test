@@ -14,6 +14,14 @@ async function handleAvailableButton(interaction, [id]) {
 
   const userId = interaction.user.id;
 
+  // Le superviseur de la session, ou le créateur s'il est CO-ATM (session sans superviseur), ne peut pas se déclarer disponible.
+  if (userId === session.supervisorId) {
+    return interaction.reply(ephemeralText('⛔ Tu es le superviseur de cette session : tu ne peux pas te déclarer disponible.'));
+  }
+  if (!session.supervisorId && userId === session.creatorId) {
+    return interaction.reply(ephemeralText('⛔ Tu es le CO-ATM de cette session : tu ne peux pas te déclarer disponible.'));
+  }
+
   // Ajout atomique si l'agent n'est pas encore dans la liste…
   let updated = await AtmSession.findOneAndUpdate(
     { _id: session._id, available: { $ne: userId } },

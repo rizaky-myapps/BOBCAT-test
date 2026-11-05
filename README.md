@@ -45,6 +45,7 @@ Remplis ensuite le fichier `.env` :
 | `BOBCAT_SESSION_ATM_CHANNEL_ID` | ✅ | Salon où les sessions ATM sont publiées |
 | `BOBCAT_COATM_CHANNEL_ID` | ✅ (supervision) | Salon où le superviseur sélectionné est prévenu et répond |
 | `BOBCAT_PDS_ATM_CHANNEL_ID` · `BOBCAT_PDS_PATROUILLE_CHANNEL_ID` | | Pas encore utilisés |
+| `BOBCAT_LOGS_CHANNEL_ID` | | Salon des logs (ex : superviseur retiré de la liste) |
 | `MONGODB_URI` | ✅ | URI de connexion MongoDB |
 | `MONGODB_FOLDER` | | Nom de la base MongoDB |
 | `CLOUDINARY_CLOUD_NAME` · `CLOUDINARY_API_KEY` · `CLOUDINARY_API_SECRET` · `CLOUDINARY_FOLDER` | | Cloudinary (pas encore utilisé) |
@@ -77,6 +78,9 @@ Pour limiter qui peut utiliser `/atm` ou `/superviseur` : *Paramètres du serveu
 
 Ouvre un modal avec un menu listant les membres qui ont le rôle `BOBCAT_CO_ATM_ROLE_ID` (25 maximum).
 Les superviseurs déjà enregistrés sont pré-sélectionnés : la sélection validée devient la liste des superviseurs en base.
+
+Un superviseur qui perd le rôle CO-ATM (ou quitte le serveur) est retiré automatiquement de la liste **1h après**
+(vérification toutes les minutes) s'il ne l'a pas récupéré entre-temps. Un log est alors envoyé dans `BOBCAT_LOGS_CHANNEL_ID`.
 
 ### 2. `/atm` : aperçu et création d'une session
 
@@ -112,7 +116,7 @@ Si tu n'as pas le rôle CO ATM, le superviseur sélectionné doit valider sa pr�
 4. **Pas disponible**, ou **pas de réponse dans les 10 minutes** (compté comme un refus) : le superviseur est retiré, choisis-en un autre via **Informations**.
 
 Tu es prévenu de sa réponse par un message, et ton aperçu se met à jour. Si l'aperçu a été ouvert il y a plus de 15 minutes, relance `/atm` pour le voir à jour.
-Si tu changes de superviseur après une validation, l'ancienne demande est annulée et une nouvelle est envoyée.
+Une fois sa présence validée, le superviseur ne peut plus être changé : la question disparaît du modal « Informations » (les autres informations restent modifiables).
 Si la date est invalide, la demande n'est envoyée qu'une fois la date corrigée.
 
 ### 3. L'annonce
@@ -121,7 +125,7 @@ Le message est publié dans `BOBCAT_SESSION_ATM_CHANNEL_ID` au format Components
 
 - la date et l'heure en timestamps Discord (`<t:…:d>`, `<t:…:t>`, `<t:…:R>`), affichés dans le fuseau horaire de chaque membre ;
 - le ping `@everyone` (ou le rôle `BOBCAT_EMPLOYEES_ROLE_ID`) seulement si « Ping agents » est sur OUI ;
-- les informations (radio `S6`/`S7`/`S8`, tenue, véhicule, superviseur, statut) ;
+- les informations (radio `S6`/`S7`/`S8`, tenue, véhicule, statut) ;
 - les agents sur dispatch : n°1 le créateur de la session, n°2 le superviseur (s'il y en a un), n°3 et n°4 à définir une fois la session postée ;
 - la liste des agents disponibles.
 
@@ -136,6 +140,7 @@ Logos à côté des agents sur dispatch :
 Les mentions du message (superviseur, agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
 
 **« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire. Les agents sur le dispatch ne peuvent pas se retirer.
+Le superviseur de la session, et le créateur quand il est CO-ATM (session sans superviseur), ne peuvent pas l'utiliser.
 
 ### 4. Le bouton ⚙️
 
@@ -148,7 +153,7 @@ Seul le créateur de la session peut l'utiliser ; il répond « 🚧 En dévelop
 ```
 src/
 ├── index.js                 # Démarrage du bot (MongoDB, client Discord, enregistrement des commandes, tâches de fond)
-├── jobs.js                  # Tâches de fond : brouillons expirés, demandes de supervision sans réponse
+├── jobs.js                  # Tâches de fond : brouillons expirés, demandes sans réponse, superviseurs sans le rôle CO-ATM
 ├── config.js                # Lecture / validation du .env
 ├── commands/
 │   ├── index.js             # Liste des commandes
@@ -166,6 +171,7 @@ src/
 │   ├── message.js           # Rendu de l'annonce (Components V2)
 │   ├── preview.js           # Rendu de l'aperçu /atm
 │   ├── supervision.js       # Demande de supervision (message CO-ATM, délai de 10 min, mise à jour de l'aperçu)
+│   ├── supervisorRoles.js   # Retrait des superviseurs ayant perdu le rôle CO-ATM depuis 1h
 │   └── service.js           # Publication, dispatch et logos des agents
 ├── models/
 │   ├── AtmSession.js        # Collection « Sessions-ATM » : sessions publiées
@@ -175,6 +181,7 @@ src/
 ├── database/mongoose.js     # Connexion MongoDB
 └── utils/
     ├── date.js              # Conversion « JJ/MM/AAAA HH:MM » ⇄ timestamp
+    ├── logs.js              # Envoi des logs dans BOBCAT_LOGS_CHANNEL_ID
     └── v2.js                # Messages texte au format Components V2
 ```
 

@@ -56,6 +56,10 @@ const SUPERVISOR_CHECK_INTERVAL = 30 * 1000;
 const DRAFT_LIFETIME = 5 * 60 * MINUTE;
 /** Fréquence de suppression des brouillons expirés. */
 const DRAFT_CLEANUP_INTERVAL = 10 * MINUTE;
+/** Délai avant de retirer de la liste un superviseur qui a perdu le rôle CO ATM. */
+const SUPERVISOR_ROLE_GRACE = 60 * MINUTE;
+/** Fréquence de vérification du rôle CO ATM des superviseurs. */
+const SUPERVISOR_ROLE_CHECK_INTERVAL = MINUTE;
 
 const findLabel = (list, value) => list.find((item) => item.value === value)?.label ?? value;
 
@@ -72,5 +76,7 @@ module.exports = {
   SUPERVISOR_CHECK_INTERVAL,
   DRAFT_LIFETIME,
   DRAFT_CLEANUP_INTERVAL,
+  SUPERVISOR_ROLE_GRACE,
+  SUPERVISOR_ROLE_CHECK_INTERVAL,
   findLabel,
 };

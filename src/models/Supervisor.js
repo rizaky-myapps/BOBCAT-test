@@ -7,6 +7,8 @@ const supervisorSchema = new Schema(
     userId: { type: String, required: true },
     /** Nom affiché au moment de l'ajout (libellé de secours dans le menu). */
     name: { type: String, default: '' },
+    /** Date à laquelle le bot a constaté la perte du rôle CO ATM (null s'il l'a). */
+    roleLostAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
