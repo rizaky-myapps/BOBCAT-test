@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const {
   AGENT_ROLES,
+  CANCELLED_ACCENT_COLOR,
   CLOSED_STATUSES,
   DISPATCH_MIN_LINES,
   RADIOS,
@@ -78,10 +79,13 @@ function buildMainText(data) {
 /**
  * Container principal (texte + bouton ⚙️ en haut à droite), partagé par le message et l'aperçu.
  * @param {Parameters<typeof buildMainText>[0]} data
- * @param {{ manageCustomId: string, manageDisabled?: boolean }} manage custom_id et état du bouton ⚙️
+ * @param {{ manageCustomId: string, manageDisabled?: boolean, accentColor?: number|null }} options
+ *   custom_id et état du bouton ⚙️, couleur du liseré
  */
-function buildMainContainer(data, { manageCustomId, manageDisabled = false }) {
-  return new ContainerBuilder().addSectionComponents(
+function buildMainContainer(data, { manageCustomId, manageDisabled = false, accentColor = null }) {
+  const container = new ContainerBuilder();
+  if (accentColor) container.setAccentColor(accentColor);
+  return container.addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildMainText(data)))
       .setButtonAccessory(
@@ -122,10 +126,14 @@ function buildAllowedMentions(session) {
  */
 function renderSessionMessage(session) {
   const id = session._id.toString();
+  // Session terminée ou annulée : tous les boutons sont désactivés, l'interface ne change pas.
   const closed = CLOSED_STATUSES.includes(session.status);
+  const accentColor = session.status === 'cancelled' ? CANCELLED_ACCENT_COLOR : null;
 
-  // --- Bloc « Agent(s) disponible(s) » + bouton « Je suis disponible » ---
-  const availableContainer = new ContainerBuilder().addSectionComponents(
+  // --- Bloc « Agent(s) disponible(s) » + bouton « Je suis disponible » (inutilisable après le dispatching) ---
+  const availableContainer = new ContainerBuilder();
+  if (accentColor) availableContainer.setAccentColor(accentColor);
+  availableContainer.addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
@@ -135,15 +143,20 @@ function renderSessionMessage(session) {
       .setButtonAccessory(
         new ButtonBuilder()
           .setCustomId(`atm:dispo:${id}`)
-          .setStyle(closed ? ButtonStyle.Secondary : ButtonStyle.Success)
-          .setLabel(closed ? `Session ${findLabel(STATUSES, session.status).toLowerCase()}` : 'Je suis disponible')
-          .setDisabled(closed),
+          .setStyle(ButtonStyle.Success)
+          .setLabel('Je suis disponible')
+          .setDisabled(closed || Boolean(session.dispatchedAt)),
       ),
   );
 
   return {
     flags: MessageFlags.IsComponentsV2,
-    components: [separator(), buildMainContainer(session, { manageCustomId: `atm:manage:${id}` }), availableContainer, separator()],
+    components: [
+      separator(),
+      buildMainContainer(session, { manageCustomId: `atm:manage:${id}`, manageDisabled: closed, accentColor }),
+      availableContainer,
+      separator(),
+    ],
     allowedMentions: buildAllowedMentions(session),
   };
 }

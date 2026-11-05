@@ -16,6 +16,13 @@ const FIELDS = {
   vehicleOther: 'vehicule_autre',
   supervisor: 'superviseur',
   supervisors: 'superviseurs',
+  cancelReason: 'raison',
+  cancelDetails: 'raison_autre',
+  agents: 'agents',
+  driver: 'conducteur',
+  moto: 'motard',
+  mallettes: 'mallettes',
+  photo: 'photo',
 };
 
 const DATE_PLACEHOLDER = 'JJ/MM/AAAA HH:MM (ex : 31/10/2026 21:00)';
@@ -143,9 +150,19 @@ function buildSupervisorModal(options, roleName) {
     );
 }
 
+/** Fichiers envoyés dans un champ « upload » d'un modal (le champ peut être absent s'il est laissé vide). */
+function getUploadedFiles(interaction, customId) {
+  if (!interaction.fields.fields.has(customId)) return [];
+  return [...(interaction.fields.getUploadedFiles(customId)?.values() ?? [])];
+}
+
 module.exports = {
   FIELDS,
+  getUploadedFiles,
   truncate,
+  prefill,
+  selectLabel,
+  vehicleOtherInput,
   buildInfoModal,
   buildPlateModal,
   buildSupervisorModal,

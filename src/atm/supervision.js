@@ -199,6 +199,7 @@ async function expirePendingRequests(client) {
 }
 
 module.exports = {
+  fetchCoAtmChannel,
   renderSupervisionRequest,
   sendSupervisionRequest,
   rememberPreview,

@@ -1,25 +1,33 @@
+const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
 const { CLOSED_STATUSES } = require('../atm/constants');
 const { renderSessionMessage } = require('../atm/message');
-const { findSession } = require('../atm/service');
+const { renderSessionPanel } = require('../atm/panel');
+const { canManageSession, findSession } = require('../atm/service');
 const { ephemeralText } = require('../utils/v2');
 
-/** Bouton « Je suis disponible » : ajoute / retire l'agent de la liste. */
+/**
+ * Bouton « Je suis disponible » : ajoute / retire l'agent de la liste.
+ * Seuls les membres qui ne sont pas sur le dispatch (rôle CO-ATM ou non) peuvent voter.
+ */
 async function handleAvailableButton(interaction, [id]) {
   const session = await findSession(id);
   if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
   if (CLOSED_STATUSES.includes(session.status)) {
     return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
   }
+  if (session.dispatchedAt) {
+    return interaction.reply(ephemeralText('🔒 Le dispatching de cette session est déjà fait.'));
+  }
 
   const userId = interaction.user.id;
-
-  // Le superviseur de la session, ou le créateur s'il est CO-ATM (session sans superviseur), ne peut pas se déclarer disponible.
-  if (userId === session.supervisorId) {
-    return interaction.reply(ephemeralText('⛔ Tu es le superviseur de cette session : tu ne peux pas te déclarer disponible.'));
-  }
-  if (!session.supervisorId && userId === session.creatorId) {
+  if (userId === session.creatorId) {
     return interaction.reply(ephemeralText('⛔ Tu es le CO-ATM de cette session : tu ne peux pas te déclarer disponible.'));
+  }
+  if (session.dispatch.some((agent) => agent.userId === userId)) {
+    return interaction.reply(
+      ephemeralText('⛔ Tu es sur le dispatch de cette session : tu ne peux pas te déclarer disponible.'),
+    );
   }
 
   // Ajout atomique si l'agent n'est pas encore dans la liste…
@@ -30,13 +38,8 @@ async function handleAvailableButton(interaction, [id]) {
   );
   const joined = Boolean(updated);
 
-  // … sinon on le retire de la liste, sauf s'il est sur le dispatch.
+  // … sinon on le retire de la liste.
   if (!joined) {
-    if (session.dispatch.some((agent) => agent.userId === userId)) {
-      return interaction.reply(
-        ephemeralText('⛔ Tu es sur le dispatch de cette session : tu ne peux pas te retirer de la liste.'),
-      );
-    }
     updated = await AtmSession.findByIdAndUpdate(
       session._id,
       { $pull: { available: userId } },
@@ -54,14 +57,19 @@ async function handleAvailableButton(interaction, [id]) {
   );
 }
 
-/** Bouton ⚙️ (en haut à droite du message) : réservé au créateur de la session. */
+/** Bouton ⚙️ : panneau de gestion, réservé au CO-ATM de la session et à la direction. */
 async function handleManageButton(interaction, [id]) {
   const session = await findSession(id);
   if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
-  if (session.creatorId !== interaction.user.id) {
-    return interaction.reply(ephemeralText('⛔ Seul le créateur de la session peut la modifier.'));
+  if (!canManageSession(interaction, session)) {
+    return interaction.reply(ephemeralText('⛔ Seuls le CO-ATM de la session et la direction peuvent la gérer.'));
   }
-  return interaction.reply(ephemeralText('🚧 En développement'));
+  if (CLOSED_STATUSES.includes(session.status)) {
+    return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
+  }
+
+  const panel = renderSessionPanel(session);
+  return interaction.reply({ ...panel, flags: panel.flags | MessageFlags.Ephemeral });
 }
 
 module.exports = { handleAvailableButton, handleManageButton };

@@ -24,13 +24,36 @@ const VEHICLES = [
 /** Statuts d'une session (affichés dans « Informations »). */
 const STATUSES = [
   { value: 'pending', label: 'En attente...', emoji: '⏳' },
-  { value: 'in_progress', label: 'En cours', emoji: '🚨' },
+  { value: 'in_progress', label: 'En cours...', emoji: '🚨' },
   { value: 'done', label: 'Terminée', emoji: '✅' },
   { value: 'cancelled', label: 'Annulée', emoji: '❌' },
 ];
 
-/** Statuts pour lesquels on ne peut plus se déclarer disponible. */
+/** Statuts d'une session terminée ou annulée : tous ses boutons sont désactivés. */
 const CLOSED_STATUSES = ['done', 'cancelled'];
+
+/** Couleur du liseré d'une session annulée. */
+const CANCELLED_ACCENT_COLOR = 0xed4245;
+
+const CANCEL_OTHER = 'autre';
+
+/** Raisons proposées dans le modal « Annuler ». */
+const CANCEL_REASONS = [
+  { value: 'effectif', label: "Manque d'effectif" },
+  { value: 'coatm', label: 'CO-ATM indisponible' },
+  { value: 'superviseur', label: 'Superviseur indisponible' },
+  { value: 'vehicule', label: 'Véhicule indisponible' },
+  { value: CANCEL_OTHER, label: 'Autre' },
+];
+
+/** Raison enregistrée quand une session maintenue n'a pas commencé à temps. */
+const CANCEL_NOT_STARTED = { value: 'non_commencee', label: 'Session non commencée à temps' };
+
+/** Places dans le véhicule (CO-ATM et superviseur compris) ; un agent de plus peut suivre en moto. */
+const VEHICLE_CAPACITY = 4;
+
+/** Nombre de mallettes proposé dans le modal « Nouvelle PDS ». */
+const MAX_MALLETTES = 5;
 
 /**
  * Rôles attribuables aux agents sur dispatch (cf. « Légende » du message).
@@ -41,6 +64,7 @@ const AGENT_ROLES = [
   { value: 'co_atm', emoji: '🧳', label: 'CO ATM (en cas du supervision)' },
   { value: 'pompe', emoji: '🔫', label: 'Fusil à pompe' },
   { value: 'conducteur', emoji: '🚙', label: 'Conducteur' },
+  { value: 'moto', emoji: '🏍️', label: 'Motard (Unité 2 roues)' },
   { value: 'nouveau', emoji: '🆕', label: "Besoin d'explication" },
 ];
 
@@ -60,6 +84,12 @@ const DRAFT_CLEANUP_INTERVAL = 10 * MINUTE;
 const SUPERVISOR_ROLE_GRACE = 60 * MINUTE;
 /** Fréquence de vérification du rôle CO ATM des superviseurs. */
 const SUPERVISOR_ROLE_CHECK_INTERVAL = MINUTE;
+/** Délai après l'heure prévue avant de demander au CO-ATM si une session non commencée est maintenue. */
+const START_CHECK_DELAY = 30 * MINUTE;
+/** Délai pour commencer une session maintenue, sinon elle est annulée. */
+const START_DEADLINE = 10 * MINUTE;
+/** Fréquence de vérification des sessions non commencées. */
+const SESSION_CHECK_INTERVAL = MINUTE;
 
 const findLabel = (list, value) => list.find((item) => item.value === value)?.label ?? value;
 
@@ -70,6 +100,12 @@ module.exports = {
   VEHICLE_OTHER,
   STATUSES,
   CLOSED_STATUSES,
+  CANCELLED_ACCENT_COLOR,
+  CANCEL_OTHER,
+  CANCEL_REASONS,
+  CANCEL_NOT_STARTED,
+  VEHICLE_CAPACITY,
+  MAX_MALLETTES,
   AGENT_ROLES,
   DISPATCH_MIN_LINES,
   SUPERVISOR_RESPONSE_DELAY,
@@ -78,5 +114,8 @@ module.exports = {
   DRAFT_CLEANUP_INTERVAL,
   SUPERVISOR_ROLE_GRACE,
   SUPERVISOR_ROLE_CHECK_INTERVAL,
+  START_CHECK_DELAY,
+  START_DEADLINE,
+  SESSION_CHECK_INTERVAL,
   findLabel,
 };

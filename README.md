@@ -5,11 +5,15 @@ Bot Discord (**discord.js v14**) qui organise les sessions de ravitaillement d'A
 - la commande `/superviseur` définit les superviseurs proposés dans `/atm` ;
 - la commande `/atm` affiche un aperçu du message, à compléter avec ses boutons ;
 - le bot publie l'annonce au format **Components V2** dans un salon dédié ;
-- les agents s'inscrivent avec le bouton **« Je suis disponible »**.
+- les agents s'inscrivent avec le bouton **« Je suis disponible »** ;
+- le CO-ATM (l'organisateur de la session) la gère avec le bouton **⚙️** : dispatching, informations, début, PDS ATM, fin ou annulation.
 
 Tous les messages du bot sont au format Components V2 (séparateur, container, séparateur).
-Les sessions, brouillons et superviseurs sont stockés dans **MongoDB** (via **mongoose**), dans les collections
-`Sessions-ATM`, `Sessions-ATM-Draft` et `Superviseur-List`. Le service **Cloudinary** est configuré mais pas encore utilisé.
+Les sessions, brouillons, superviseurs et PDS sont stockés dans **MongoDB** (via **mongoose**), dans les collections
+`Sessions-ATM`, `Sessions-ATM-Draft`, `Superviseur-List` et `PDS-ATM`. Les photos des PDS ATM sont hébergées sur **Cloudinary**.
+
+> **CO-ATM** désigne dans ce document l'organisateur d'une session (celui qui l'a créée avec `/atm`),
+> à ne pas confondre avec le **rôle** CO ATM (`BOBCAT_CO_ATM_ROLE_ID`), qui indique seulement qu'un membre n'a plus besoin d'être supervisé.
 
 ---
 
@@ -36,19 +40,21 @@ Remplis ensuite le fichier `.env` :
 | --- | --- | --- |
 | `BOBCAT_DISCORD_BOT_TOKEN` | ✅ | Token du bot |
 | `BOBCAT_GUILD_ID` | | Serveur où les commandes sont enregistrées au démarrage (instantané). Vide = commandes globales (jusqu'à 1h de propagation) |
-| `BOBCAT_DIRECTION_ROLE_ID` | | Pas encore utilisé |
+| `BOBCAT_DIRECTION_ROLE_ID` | | Peut gérer toutes les sessions (⚙️, question « maintenue ? ») et modifier les PDS |
 | `BOBCAT_CO_ATM_ROLE_ID` | ✅ (`/superviseur`) | Membres proposés dans `/superviseur` · les membres ayant ce rôle n'ont pas besoin de superviseur |
 | `BOBCAT_EMPLOYEES_ROLE_ID` | | Rôle mentionné quand « Ping agents » est sur OUI. Vide = `@everyone` |
-| `BOBCAT_UNITE_2_ROUES_ROLE_ID` · `BOBCAT_UNITE_K9_ROLE_ID` · `BOBCAT_RECRUTEUR_ROLE_ID` · `BOBCAT_FORMATEUR_ROLE_ID` | | Pas encore utilisés |
+| `BOBCAT_UNITE_2_ROUES_ROLE_ID` | | Seuls ces membres peuvent être le motard du dispatching |
+| `BOBCAT_UNITE_K9_ROLE_ID` · `BOBCAT_RECRUTEUR_ROLE_ID` · `BOBCAT_FORMATEUR_ROLE_ID` | | Pas encore utilisés |
 | `BOBCAT_FUSIL_A_POMPE_ROLE_ID` | | Logo 🔫 sur le dispatch |
 | `BOBCAT_FUSIL_ANTI_EMEUTE_ROLE_ID` | | Pas encore utilisé |
 | `BOBCAT_SESSION_ATM_CHANNEL_ID` | ✅ | Salon où les sessions ATM sont publiées |
 | `BOBCAT_COATM_CHANNEL_ID` | ✅ (supervision) | Salon où le superviseur sélectionné est prévenu et répond |
-| `BOBCAT_PDS_ATM_CHANNEL_ID` · `BOBCAT_PDS_PATROUILLE_CHANNEL_ID` | | Pas encore utilisés |
+| `BOBCAT_PDS_ATM_CHANNEL_ID` | ✅ (PDS) | Salon où les PDS ATM sont envoyées |
+| `BOBCAT_PDS_PATROUILLE_CHANNEL_ID` | | Pas encore utilisé |
 | `BOBCAT_LOGS_CHANNEL_ID` | | Salon des logs (ex : superviseur retiré de la liste) |
 | `MONGODB_URI` | ✅ | URI de connexion MongoDB |
 | `MONGODB_FOLDER` | | Nom de la base MongoDB |
-| `CLOUDINARY_CLOUD_NAME` · `CLOUDINARY_API_KEY` · `CLOUDINARY_API_SECRET` · `CLOUDINARY_FOLDER` | | Cloudinary (pas encore utilisé) |
+| `CLOUDINARY_CLOUD_NAME` · `CLOUDINARY_API_KEY` · `CLOUDINARY_API_SECRET` · `CLOUDINARY_FOLDER` | ✅ (PDS) | Cloudinary : photos des PDS ATM |
 | `TIMEZONE` | | Fuseau horaire de la date saisie (défaut : `Europe/Paris`) |
 
 Lance le bot :
@@ -62,7 +68,7 @@ Au démarrage, le bot enregistre (ou met à jour) automatiquement les commandes 
 ### Permissions du bot
 
 Dans le salon `BOBCAT_SESSION_ATM_CHANNEL_ID`, le bot a besoin de : **Voir le salon**, **Envoyer des messages** et, pour le ping, **Mentionner @everyone, @here et tous les rôles** (ou un `BOBCAT_EMPLOYEES_ROLE_ID` mentionnable).
-Dans le salon `BOBCAT_COATM_CHANNEL_ID` : **Voir le salon** et **Envoyer des messages**.
+Dans les salons `BOBCAT_COATM_CHANNEL_ID`, `BOBCAT_PDS_ATM_CHANNEL_ID` et `BOBCAT_LOGS_CHANNEL_ID` : **Voir le salon** et **Envoyer des messages**.
 
 **Intent privilégié obligatoire** : active **Server Members Intent** dans le portail développeur
 (*ton application → Bot → Privileged Gateway Intents*). Il sert à lister les membres ayant un rôle (CO ATM, Fusil à pompe…).
@@ -83,6 +89,9 @@ Un superviseur qui perd le rôle CO-ATM (ou quitte le serveur) est retiré autom
 (vérification toutes les minutes) s'il ne l'a pas récupéré entre-temps. Un log est alors envoyé dans `BOBCAT_LOGS_CHANNEL_ID`.
 
 ### 2. `/atm` : aperçu et création d'une session
+
+Si tu diriges déjà une session prévue aujourd'hui, ou si tu es sur le dispatch de l'une d'elles (hors sessions annulées),
+`/atm` t'en informe avec le lien vers la session et un bouton **« Poster quand même »** qui affiche l'aperçu.
 
 `/atm` affiche (pour toi seul) un aperçu du message qui sera envoyé. Le bouton ⚙️ y est désactivé et la liste des agents disponibles est remplacée par des boutons :
 
@@ -126,25 +135,63 @@ Le message est publié dans `BOBCAT_SESSION_ATM_CHANNEL_ID` au format Components
 - la date et l'heure en timestamps Discord (`<t:…:d>`, `<t:…:t>`, `<t:…:R>`), affichés dans le fuseau horaire de chaque membre ;
 - le ping `@everyone` (ou le rôle `BOBCAT_EMPLOYEES_ROLE_ID`) seulement si « Ping agents » est sur OUI ;
 - les informations (radio `S6`/`S7`/`S8`, tenue, véhicule, statut) ;
-- les agents sur dispatch : n°1 le créateur de la session, n°2 le superviseur (s'il y en a un), n°3 et n°4 à définir une fois la session postée ;
+- les agents sur dispatch : n°1 le CO-ATM, n°2 le superviseur (s'il y en a un), puis les agents choisis avec « Dispatching » ;
 - la liste des agents disponibles.
 
 Logos à côté des agents sur dispatch :
 
 | Logo | Attribué à |
 | --- | --- |
-| 🛡️ | Créateur de la session (chef d'opération) |
+| 🛡️ | CO-ATM (chef d'opération) |
 | 🧳 | Superviseur sélectionné |
 | 🔫 | Membre ayant le rôle `BOBCAT_FUSIL_A_POMPE_ROLE_ID` |
+| 🚙 | Conducteur (choisi au dispatching) |
+| 🏍️ | Motard (choisi au dispatching, rôle `BOBCAT_UNITE_2_ROUES_ROLE_ID`) |
 
-Les mentions du message (superviseur, agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
+Les mentions du message (agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
 
-**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire. Les agents sur le dispatch ne peuvent pas se retirer.
-Le superviseur de la session, et le créateur quand il est CO-ATM (session sans superviseur), ne peuvent pas l'utiliser.
+**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire. Seuls les membres qui ne sont **pas sur le dispatch** peuvent l'utiliser (qu'ils aient le rôle CO ATM ou non) : le CO-ATM et le superviseur ne le peuvent pas. Le bouton devient inutilisable une fois le dispatching fait.
 
-### 4. Le bouton ⚙️
+### 4. Le bouton ⚙️ : gestion de la session
 
-Seul le créateur de la session peut l'utiliser ; il répond « 🚧 En développement ».
+Réservé au CO-ATM de la session et aux membres ayant le rôle `BOBCAT_DIRECTION_ROLE_ID`. Il ouvre un panneau privé.
+
+**Avant le début de la session :**
+
+| Bouton | Action |
+| --- | --- |
+| 🛑 Annuler | Modal : raison (liste) + précision obligatoire si « Autre ». Statut « Annulée », liseré rouge, tous les boutons désactivés |
+| 👥 Dispatching | Modal 1 : agents ayant voté (1 à 4, ou 1 à 3 avec un superviseur). Puis bouton **Choisir le conducteur** → modal 2 : conducteur (et motard). Le dispatch est mis à jour et « Je suis disponible » devient inutilisable |
+| 📝 Informations | Modifier la radio, le véhicule (plaque si « Autre ») et la tenue |
+| ▶️ Commencer | Statut « En cours... » ; le panneau affiche alors les boutons ci-dessous |
+
+Le véhicule compte 4 places (CO-ATM et superviseur compris) ; un agent de plus peut suivre en moto s'il a le rôle Unité 2 roues :
+sans superviseur, 3 agents dans le véhicule + 1 en moto ; avec superviseur, 2 agents dans le véhicule + 1 en moto.
+Discord ne permet pas d'ouvrir un modal directement après un autre, d'où le bouton intermédiaire « Choisir le conducteur ».
+
+**Pendant la session :**
+
+| Bouton | Action |
+| --- | --- |
+| 📦 Nouvelle PDS | Modal : nombre de mallettes (1 à 5) + photo de l'emplacement de l'ATM. Envoie la PDS dans `BOBCAT_PDS_ATM_CHANNEL_ID` |
+| 🏁 Finir la session | Statut « Terminée » ; tous les boutons sont désactivés (✏️ des PDS de la session compris) |
+
+### 5. Session non commencée
+
+30 minutes après l'heure prévue, si la session n'a pas commencé, le CO-ATM est mentionné dans `BOBCAT_COATM_CHANNEL_ID`
+avec deux boutons (CO-ATM et direction) :
+
+- **Maintenu** : le CO-ATM a 10 minutes pour la commencer. Sinon elle est annulée, et les agents ayant voté « Je suis disponible » sont prévenus par un ping dans le salon des sessions ;
+- **Annuler** : même modal que le bouton « Annuler » du panneau.
+
+### 6. PDS ATM
+
+Chaque PDS envoyée affiche la photo de l'emplacement (hébergée sur Cloudinary), l'immatriculation du véhicule de la session,
+les agents du dispatch (en texte, d'après leur surnom sur le serveur, au format `[22] • Yvick Waler`), le nombre de mallettes
+et la date prévue de la session. En dessous : le numéro de l'ATM dans la journée et un lien vers la session.
+
+- **Numéro** : il repart à `01` chaque jour. Le jour retenu est celui de la date prévue de la session : une session prévue à 23h dont une PDS est postée à 0h01 continue la numérotation de la veille.
+- **✏️** : modifier la photo (l'ancienne est supprimée de Cloudinary) et le nombre de mallettes. Réservé au CO-ATM et à la direction, et seulement tant que la session est en cours : le bouton est désactivé quand la session est terminée.
 
 ---
 
@@ -153,7 +200,7 @@ Seul le créateur de la session peut l'utiliser ; il répond « 🚧 En dévelop
 ```
 src/
 ├── index.js                 # Démarrage du bot (MongoDB, client Discord, enregistrement des commandes, tâches de fond)
-├── jobs.js                  # Tâches de fond : brouillons expirés, demandes sans réponse, superviseurs sans le rôle CO-ATM
+├── jobs.js                  # Tâches de fond : brouillons expirés, demandes sans réponse, superviseurs sans le rôle CO-ATM, sessions non commencées
 ├── config.js                # Lecture / validation du .env
 ├── commands/
 │   ├── index.js             # Liste des commandes
@@ -164,20 +211,28 @@ src/
 │   ├── index.js             # Routage des commandes, boutons, menus et modals
 │   ├── atmPreview.js        # Boutons et modals de l'aperçu /atm (informations, plaque, ping, envoi)
 │   ├── supervisor.js        # Modal /superviseur et réponses du superviseur (salon CO-ATM)
-│   └── atmSession.js        # Boutons « Je suis disponible » et ⚙️
+│   ├── atmSession.js        # Boutons « Je suis disponible » et ⚙️
+│   ├── atmPanel.js          # Actions du panneau ⚙️ et de la question « maintenue ? »
+│   └── pds.js               # Bouton ✏️ des PDS ATM
 ├── atm/
 │   ├── constants.js         # Choix des menus, statuts, rôles de la légende, limites
 │   ├── modals.js            # Construction des modals
 │   ├── message.js           # Rendu de l'annonce (Components V2)
 │   ├── preview.js           # Rendu de l'aperçu /atm
 │   ├── supervision.js       # Demande de supervision (message CO-ATM, délai de 10 min, mise à jour de l'aperçu)
+│   ├── panel.js             # Panneau ⚙️ d'une session postée
+│   ├── sessionModals.js     # Modals du panneau ⚙️ et des PDS
+│   ├── lifecycle.js         # Annuler / commencer / finir une session, annulation automatique
+│   ├── startCheck.js        # Question « session maintenue ? » 30 min après l'heure prévue
+│   ├── pds.js               # PDS ATM : message, numéro du jour, photo Cloudinary
 │   ├── supervisorRoles.js   # Retrait des superviseurs ayant perdu le rôle CO-ATM depuis 1h
 │   └── service.js           # Publication, dispatch et logos des agents
 ├── models/
 │   ├── AtmSession.js        # Collection « Sessions-ATM » : sessions publiées
 │   ├── AtmDraft.js          # Collection « Sessions-ATM-Draft » : brouillons /atm (supprimés après 5h)
-│   └── Supervisor.js        # Collection « Superviseur-List » : superviseurs (/superviseur)
-├── services/cloudinary.js   # Envoi / suppression d'images sur Cloudinary (pas encore utilisé)
+│   ├── Supervisor.js        # Collection « Superviseur-List » : superviseurs (/superviseur)
+│   └── PdsAtm.js            # Collection « PDS-ATM » : PDS ATM
+├── services/cloudinary.js   # Envoi / suppression d'images sur Cloudinary (photos des PDS)
 ├── database/mongoose.js     # Connexion MongoDB
 └── utils/
     ├── date.js              # Conversion « JJ/MM/AAAA HH:MM » ⇄ timestamp

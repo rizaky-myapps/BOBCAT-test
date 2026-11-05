@@ -65,7 +65,27 @@ function formatDateTime(date, timeZone) {
   return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`;
 }
 
+/** Date seule "JJ/MM/AAAA" dans le fuseau `timeZone`. */
+const formatDate = (date, timeZone) => formatDateTime(date, timeZone).split(' ')[0];
+
+/** Clé de jour "AAAA-MM-JJ" dans le fuseau `timeZone` (pour regrouper par journée). */
+function dayKey(date, timeZone) {
+  const [day, month, year] = formatDate(date, timeZone).split('/');
+  return `${year}-${month}-${day}`;
+}
+
+/** Début (inclus) et fin (exclue) de la journée de `date` dans le fuseau `timeZone`. */
+function getDayBounds(date, timeZone) {
+  const [day, month, year] = formatDate(date, timeZone).split('/').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    start: parseDateTime(`${pad(day)}/${pad(month)}/${year} 00:00`, timeZone),
+    end: parseDateTime(`${pad(next.getUTCDate())}/${pad(next.getUTCMonth() + 1)}/${next.getUTCFullYear()} 00:00`, timeZone),
+  };
+}
+
 /** Timestamp Unix (secondes) utilisé par les balises <t:...> de Discord. */
 const toUnix = (date) => Math.floor(date.getTime() / 1000);
 
-module.exports = { parseDateTime, formatDateTime, toUnix };
+module.exports = { parseDateTime, formatDateTime, formatDate, dayKey, getDayBounds, toUnix };
