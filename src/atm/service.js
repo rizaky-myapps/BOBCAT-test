@@ -2,8 +2,15 @@ const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
 const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
-const { MIN_DISPATCH, SESSION_DURATION, VEHICLES, VEHICLE_CAPACITY, VEHICLE_OTHER } = require('./constants');
-const { dayKey, getDayBounds } = require('../utils/date');
+const {
+  MIN_DISPATCH,
+  MIN_POST_DELAY,
+  SESSION_DURATION,
+  VEHICLES,
+  VEHICLE_CAPACITY,
+  VEHICLE_OTHER,
+} = require('./constants');
+const { dayKey, getDayBounds, toUnix } = require('../utils/date');
 
 /** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
 function resolveVehicle(value, plate) {
@@ -124,14 +131,14 @@ async function findConflictingSessions(guildId, userId, scheduledAt, excludeId =
 }
 
 /**
- * Vérifie la date d'une nouvelle session : pas dans le passé, et pas pendant une autre session
- * du créateur (il peut en prévoir une plus tard).
+ * Vérifie la date d'une nouvelle session : au moins 10 minutes après maintenant (il est 7h00 → 7h10 au plus tôt),
+ * et pas pendant une autre session du créateur (il peut en prévoir une plus tard).
  * @returns {Promise<string|null>} Le message d'erreur, ou null si la date convient.
  */
 async function checkSessionDate(guildId, userId, scheduledAt) {
-  const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
-  if (scheduledAt.getTime() < currentMinute) {
-    return '❌ La date et l’heure de la session ne peuvent pas être dans le passé.';
+  const earliest = Math.floor(Date.now() / 60_000) * 60_000 + MIN_POST_DELAY;
+  if (scheduledAt.getTime() < earliest) {
+    return `❌ Une session doit être postée au moins 10 minutes avant son heure de début : choisis <t:${toUnix(new Date(earliest))}:t> ou plus tard.`;
   }
   const [conflict] = await findConflictingSessions(guildId, userId, scheduledAt);
   if (conflict) {

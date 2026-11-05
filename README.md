@@ -95,9 +95,10 @@ Si tu diriges déjà une session prévue aujourd'hui, ou si tu es sur le dispatc
 
 Règles sur la date (vérifiées à la saisie et à l'envoi) :
 
-- elle ne peut pas être dans le passé (la minute en cours est acceptée) ;
+- une session doit être postée **au moins 10 minutes** avant son heure de début (à 7h00, 7h10 au plus tôt) ;
 - une session dure environ **1h30** : impossible de diriger une session qui chevauche une autre session sur laquelle tu es
   (CO-ATM, dispatch ou vote « Je suis disponible »). Tu peux en prévoir une plus tard.
+- la même règle s'applique au **superviseur** : il ne peut pas être sur deux sessions qui se chevauchent.
 
 `/atm` affiche (pour toi seul) un aperçu du message qui sera envoyé. Le bouton ⚙️ y est désactivé et la liste des agents disponibles est remplacée par des boutons :
 
@@ -129,6 +130,9 @@ Si tu n'as pas le rôle CO ATM, le superviseur sélectionné doit valider sa pr�
 2. Tant qu'il n'a pas répondu, les boutons **Informations** et **Choisir la plaque** de l'aperçu sont désactivés.
 3. **Disponible** : sa présence est validée, le bouton **Envoyer** s'active.
 4. **Pas disponible**, ou **pas de réponse dans les 10 minutes** (compté comme un refus) : le superviseur est retiré, choisis-en un autre via **Informations**.
+
+Un superviseur déjà sur une session qui chevauche celle-ci ne peut pas être sélectionné ni valider sa présence.
+Si, avant l'envoi, il est placé sur une autre session au même moment, sa présence est annulée et tu dois en choisir un autre.
 
 Tu es prévenu de sa réponse par un message, et ton aperçu se met à jour. Si l'aperçu a été ouvert il y a plus de 15 minutes, relance `/atm` pour le voir à jour.
 Une fois sa présence validée, le superviseur ne peut plus être changé : la question disparaît du modal « Informations » (les autres informations restent modifiables).
@@ -190,7 +194,8 @@ Discord ne permet pas d'ouvrir un modal directement après un autre, d'où le bo
   - sinon, la session est **annulée** (manque d'agents) et un message, sans mention, l'indique dans `BOBCAT_COATM_CHANNEL_ID`.
 
   Cette vérification n'est pas faite pour une session postée moins de 30 minutes avant son heure.
-- **15 minutes avant**, si le dispatching est fait, les agents dispatchés (superviseur compris) sont mentionnés dans le salon des sessions pour un rappel.
+- **15 minutes avant**, si le dispatching est fait, tout le dispatch (CO-ATM, superviseur et agents) est mentionné dans le salon des sessions pour un rappel.
+  Pas de rappel pour une session postée moins de 15 minutes avant son heure.
 
 ### 6. Session non commencée
 

@@ -79,7 +79,10 @@ async function checkDispatchDeadlines(client) {
   }
 }
 
-/** 15 min avant l'heure prévue : rappel (ping) aux agents dispatchés dans le salon des sessions. */
+/**
+ * 15 min avant l'heure prévue : rappel (ping) à tout le dispatch, CO-ATM compris, dans le salon des sessions.
+ * Pas de rappel pour une session postée moins de 15 min avant son heure.
+ */
 async function sendDispatchReminders(client) {
   const now = Date.now();
   const due = await AtmSession.find({
@@ -96,10 +99,10 @@ async function sendDispatchReminders(client) {
       AFTER,
     );
     if (!session || session.scheduledAt.getTime() <= now) continue;
+    const reminderTime = session.scheduledAt.getTime() - DISPATCH_REMINDER_BEFORE;
+    if (session.createdAt && session.createdAt.getTime() > reminderTime) continue; // postée moins de 15 min avant
 
-    // Agents du dispatch (superviseur compris), hors CO-ATM.
-    const agents = session.dispatch.map((agent) => agent.userId).filter((userId) => userId !== session.creatorId);
-    if (!agents.length) continue;
+    const agents = session.dispatch.map((agent) => agent.userId);
 
     const ts = toUnix(session.scheduledAt);
     const message = textMessage(

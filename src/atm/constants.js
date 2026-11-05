@@ -95,6 +95,8 @@ const START_CHECK_DELAY = 30 * MINUTE;
 const START_DEADLINE = 10 * MINUTE;
 /** Fréquence de vérification des sessions non commencées. */
 const SESSION_CHECK_INTERVAL = MINUTE;
+/** Délai minimum entre la publication d'une session et son heure de début. */
+const MIN_POST_DELAY = 10 * MINUTE;
 /** Durée approximative d'une session : un membre ne peut pas être sur deux sessions qui se chevauchent. */
 const SESSION_DURATION = 90 * MINUTE;
 /** Délai avant l'heure prévue pour vérifier le dispatching (rappel au CO-ATM ou annulation faute d'agents). */
@@ -131,6 +133,7 @@ module.exports = {
   START_DEADLINE,
   SESSION_CHECK_INTERVAL,
   SESSION_DURATION,
+  MIN_POST_DELAY,
   DISPATCH_CHECK_BEFORE,
   DISPATCH_REMINDER_BEFORE,
   findLabel,

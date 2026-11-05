@@ -5,7 +5,14 @@ const { config } = require('../config');
 const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
 const { FIELDS, buildInfoModal, buildPlateModal, truncate } = require('../atm/modals');
 const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
-const { checkSessionDate, getConfirmedSupervisorId, isCoAtm, publishSession } = require('../atm/service');
+const {
+  checkSessionDate,
+  findConflictingSessions,
+  getConfirmedSupervisorId,
+  isCoAtm,
+  publishSession,
+  sessionUrl,
+} = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
 const { parseDateTime } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
@@ -33,6 +40,12 @@ async function loadDraft(interaction, id) {
 async function updatePreview(interaction, draft) {
   await interaction.update(renderPreview(draft, interaction.guild));
   rememberPreview(interaction, draft);
+}
+
+/** Message d'erreur si le superviseur est déjà sur une session qui chevauche `scheduledAt`, sinon null. */
+async function checkSupervisorAvailability(guildId, supervisorId, scheduledAt) {
+  const [conflict] = await findConflictingSessions(guildId, supervisorId, scheduledAt);
+  return conflict ? `❌ <@${supervisorId}> est déjà sur une session à ce moment-là : ${sessionUrl(conflict)}` : null;
 }
 
 /** Superviseurs enregistrés en base, au format des options d'un menu (25 max). */
@@ -95,7 +108,7 @@ async function handleInfoModal(interaction, [id]) {
       `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
     );
   } else {
-    // Ni dans le passé, ni pendant une autre session du créateur.
+    // Au moins 10 min à l'avance, et pas pendant une autre session du créateur.
     const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
     if (dateError) {
       notices.push(dateError);
@@ -103,12 +116,26 @@ async function handleInfoModal(interaction, [id]) {
     }
   }
 
+  // Le superviseur ne peut pas non plus être sur deux sessions en même temps.
+  if (scheduledAt && supervisorId) {
+    const supervisorError = await checkSupervisorAvailability(draft.guildId, supervisorId, scheduledAt);
+    if (supervisorError) {
+      if (accepted) {
+        notices.push(`${supervisorError}\nTon superviseur ne peut pas être sur deux sessions en même temps : choisis une autre heure.`);
+        scheduledAt = null;
+      } else {
+        notices.push(`${supervisorError}\nChoisis un autre superviseur.`);
+        supervisorId = null;
+      }
+    }
+  }
+
   draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
   if (!accepted) draft.supervisorRequest = null;
 
   if (!scheduledAt) {
-    if (askSupervisor) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
-  } else if (askSupervisor) {
+    if (askSupervisor && supervisorId) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
+  } else if (askSupervisor && supervisorId) {
     try {
       draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
       notices.push(
@@ -174,10 +201,24 @@ async function handleSendButton(interaction, [id]) {
       ),
     );
   }
-  // La date a pu passer, ou une autre session a pu être prévue entre-temps.
+  // L'heure a pu se rapprocher, ou une autre session a pu être prévue entre-temps.
   const dateError = await checkSessionDate(draft.guildId, draft.userId, draft.scheduledAt);
   if (dateError) {
     return interaction.reply(ephemeralText(`${dateError}\nModifie la date via « Informations » avant d'envoyer.`));
+  }
+  // Le superviseur a pu être placé sur une autre session au même moment depuis sa validation.
+  const confirmedSupervisorId = getConfirmedSupervisorId(draft);
+  if (confirmedSupervisorId) {
+    const supervisorError = await checkSupervisorAvailability(draft.guildId, confirmedSupervisorId, draft.scheduledAt);
+    if (supervisorError) {
+      draft.supervisorId = null;
+      draft.supervisorRequest = null;
+      await draft.save();
+      await updatePreview(interaction, draft);
+      return interaction.followUp(
+        ephemeralText(`${supervisorError}\nSa présence est annulée : choisis un autre superviseur via « Informations ».`),
+      );
+    }
   }
 
   // Suppression atomique : empêche un double envoi en cas de double clic.

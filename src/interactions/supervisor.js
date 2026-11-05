@@ -3,6 +3,7 @@ const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
 const { FIELDS } = require('../atm/modals');
+const { findConflictingSessions, sessionUrl } = require('../atm/service');
 const { notifyResolution, renderSupervisionRequest, resolveRequest } = require('../atm/supervision');
 const { ephemeralText } = require('../utils/v2');
 
@@ -53,6 +54,18 @@ async function handleSupervisorAnswer(interaction, [draftId, requestId], answer)
   }
 
   const status = request.expiresAt <= new Date() ? 'expired' : answer;
+
+  // Un superviseur ne peut pas être sur deux sessions en même temps.
+  if (status === 'accepted') {
+    const [conflict] = await findConflictingSessions(draft.guildId, request.supervisorId, draft.scheduledAt);
+    if (conflict) {
+      return interaction.reply(
+        ephemeralText(
+          `⛔ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nTu ne peux pas superviser celle-ci : clique sur « Pas disponible ».`,
+        ),
+      );
+    }
+  }
   const updated = await resolveRequest(draft._id, requestId, status);
   if (!updated) return interaction.reply(ephemeralText("ℹ️ Cette demande de supervision n'est plus d'actualité."));
 
