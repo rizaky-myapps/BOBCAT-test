@@ -48,9 +48,14 @@ const CANCEL_REASONS = [
 
 /** Raison enregistrée quand une session maintenue n'a pas commencé à temps. */
 const CANCEL_NOT_STARTED = { value: 'non_commencee', label: 'Session non commencée à temps' };
+/** Raison enregistrée quand une session est annulée faute d'agents disponibles. */
+const CANCEL_NO_AGENTS = { value: 'manque_agents', label: "Manque d'agents" };
 
 /** Places dans le véhicule (CO-ATM et superviseur compris) ; un agent de plus peut suivre en moto. */
 const VEHICLE_CAPACITY = 4;
+
+/** Nombre minimum de personnes sur le dispatch pour commencer (CO-ATM compris). */
+const MIN_DISPATCH = 3;
 
 /** Nombre de mallettes proposé dans le modal « Nouvelle PDS ». */
 const MAX_MALLETTES = 5;
@@ -90,6 +95,12 @@ const START_CHECK_DELAY = 30 * MINUTE;
 const START_DEADLINE = 10 * MINUTE;
 /** Fréquence de vérification des sessions non commencées. */
 const SESSION_CHECK_INTERVAL = MINUTE;
+/** Durée approximative d'une session : un membre ne peut pas être sur deux sessions qui se chevauchent. */
+const SESSION_DURATION = 90 * MINUTE;
+/** Délai avant l'heure prévue pour vérifier le dispatching (rappel au CO-ATM ou annulation faute d'agents). */
+const DISPATCH_CHECK_BEFORE = 30 * MINUTE;
+/** Délai avant l'heure prévue pour le rappel aux agents dispatchés. */
+const DISPATCH_REMINDER_BEFORE = 15 * MINUTE;
 
 const findLabel = (list, value) => list.find((item) => item.value === value)?.label ?? value;
 
@@ -104,7 +115,9 @@ module.exports = {
   CANCEL_OTHER,
   CANCEL_REASONS,
   CANCEL_NOT_STARTED,
+  CANCEL_NO_AGENTS,
   VEHICLE_CAPACITY,
+  MIN_DISPATCH,
   MAX_MALLETTES,
   AGENT_ROLES,
   DISPATCH_MIN_LINES,
@@ -117,5 +130,8 @@ module.exports = {
   START_CHECK_DELAY,
   START_DEADLINE,
   SESSION_CHECK_INTERVAL,
+  SESSION_DURATION,
+  DISPATCH_CHECK_BEFORE,
+  DISPATCH_REMINDER_BEFORE,
   findLabel,
 };

@@ -2,7 +2,7 @@ const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
 const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
-const { VEHICLES, VEHICLE_CAPACITY, VEHICLE_OTHER } = require('./constants');
+const { MIN_DISPATCH, SESSION_DURATION, VEHICLES, VEHICLE_CAPACITY, VEHICLE_OTHER } = require('./constants');
 const { dayKey, getDayBounds } = require('../utils/date');
 
 /** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
@@ -95,6 +95,52 @@ async function findTodaySessionsForUser(guildId, userId, now = new Date()) {
     .map((session) => ({ session, leads: session.creatorId === userId }));
 }
 
+/** Agents à dispatcher au minimum pour pouvoir commencer (en plus du CO-ATM et du superviseur). */
+const getMinAgents = (session) => MIN_DISPATCH - (session.supervisorId ? 2 : 1);
+
+/** Le membre est-il sur cette session ? (CO-ATM, dispatch ou vote « Je suis disponible ») */
+const isInvolved = (session, userId) =>
+  session.creatorId === userId ||
+  session.dispatch.some((agent) => agent.userId === userId) ||
+  session.available.includes(userId);
+
+/**
+ * Sessions (en attente ou en cours) sur lesquelles le membre est déjà, et qui chevauchent
+ * une session prévue à `scheduledAt` (une session dure environ 1h30).
+ */
+async function findConflictingSessions(guildId, userId, scheduledAt, excludeId = null) {
+  const time = scheduledAt.getTime();
+  const sessions = await AtmSession.find({
+    guildId,
+    scheduledAt: { $gt: new Date(time - SESSION_DURATION), $lt: new Date(time + SESSION_DURATION) },
+  });
+  return sessions.filter(
+    (session) =>
+      ['pending', 'in_progress'].includes(session.status) &&
+      session.messageId &&
+      String(session._id) !== String(excludeId) &&
+      isInvolved(session, userId),
+  );
+}
+
+/**
+ * Vérifie la date d'une nouvelle session : pas dans le passé, et pas pendant une autre session
+ * du créateur (il peut en prévoir une plus tard).
+ * @returns {Promise<string|null>} Le message d'erreur, ou null si la date convient.
+ */
+async function checkSessionDate(guildId, userId, scheduledAt) {
+  const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
+  if (scheduledAt.getTime() < currentMinute) {
+    return '❌ La date et l’heure de la session ne peuvent pas être dans le passé.';
+  }
+  const [conflict] = await findConflictingSessions(guildId, userId, scheduledAt);
+  if (conflict) {
+    return `❌ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}
+Une session dure environ 1h30 : choisis une heure qui ne la chevauche pas.`;
+  }
+  return null;
+}
+
 /** Lien vers le message d'une session. */
 const sessionUrl = (session) =>
   `https://discord.com/channels/${session.guildId}/${session.channelId}/${session.messageId}`;
@@ -163,6 +209,9 @@ module.exports = {
   buildDispatch,
   getAgentSlots,
   getDispatchedAgents,
+  getMinAgents,
+  findConflictingSessions,
+  checkSessionDate,
   canManageSession,
   findTodaySessionsForUser,
   sessionUrl,

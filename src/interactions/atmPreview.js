@@ -5,7 +5,7 @@ const { config } = require('../config');
 const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
 const { FIELDS, buildInfoModal, buildPlateModal, truncate } = require('../atm/modals');
 const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
-const { getConfirmedSupervisorId, isCoAtm, publishSession } = require('../atm/service');
+const { checkSessionDate, getConfirmedSupervisorId, isCoAtm, publishSession } = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
 const { parseDateTime } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
@@ -88,15 +88,25 @@ async function handleInfoModal(interaction, [id]) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
 
-  const scheduledAt = parseDateTime(rawDate, config.timezone);
-  draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
-  if (!accepted) draft.supervisorRequest = null;
-
+  let scheduledAt = parseDateTime(rawDate, config.timezone);
   const notices = [];
   if (!scheduledAt) {
     notices.push(
       `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
     );
+  } else {
+    // Ni dans le passé, ni pendant une autre session du créateur.
+    const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
+    if (dateError) {
+      notices.push(dateError);
+      scheduledAt = null;
+    }
+  }
+
+  draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
+  if (!accepted) draft.supervisorRequest = null;
+
+  if (!scheduledAt) {
     if (askSupervisor) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
   } else if (askSupervisor) {
     try {
@@ -163,6 +173,11 @@ async function handleSendButton(interaction, [id]) {
         "❌ Complète toutes les informations avant d'envoyer la session (et attends la validation du superviseur).",
       ),
     );
+  }
+  // La date a pu passer, ou une autre session a pu être prévue entre-temps.
+  const dateError = await checkSessionDate(draft.guildId, draft.userId, draft.scheduledAt);
+  if (dateError) {
+    return interaction.reply(ephemeralText(`${dateError}\nModifie la date via « Informations » avant d'envoyer.`));
   }
 
   // Suppression atomique : empêche un double envoi en cas de double clic.

@@ -93,6 +93,12 @@ Un superviseur qui perd le rôle CO-ATM (ou quitte le serveur) est retiré autom
 Si tu diriges déjà une session prévue aujourd'hui, ou si tu es sur le dispatch de l'une d'elles (hors sessions annulées),
 `/atm` t'en informe avec le lien vers la session et un bouton **« Poster quand même »** qui affiche l'aperçu.
 
+Règles sur la date (vérifiées à la saisie et à l'envoi) :
+
+- elle ne peut pas être dans le passé (la minute en cours est acceptée) ;
+- une session dure environ **1h30** : impossible de diriger une session qui chevauche une autre session sur laquelle tu es
+  (CO-ATM, dispatch ou vote « Je suis disponible »). Tu peux en prévoir une plus tard.
+
 `/atm` affiche (pour toi seul) un aperçu du message qui sera envoyé. Le bouton ⚙️ y est désactivé et la liste des agents disponibles est remplacée par des boutons :
 
 | Bouton | Action |
@@ -151,6 +157,7 @@ Logos à côté des agents sur dispatch :
 Les mentions du message (agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
 
 **« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire. Seuls les membres qui ne sont **pas sur le dispatch** peuvent l'utiliser (qu'ils aient le rôle CO ATM ou non) : le CO-ATM et le superviseur ne le peuvent pas. Le bouton devient inutilisable une fois le dispatching fait.
+Il est aussi impossible de voter pour une session qui chevauche (moins de 1h30 d'écart) une autre session sur laquelle tu es déjà.
 
 ### 4. Le bouton ⚙️ : gestion de la session
 
@@ -163,7 +170,7 @@ Réservé au CO-ATM de la session et aux membres ayant le rôle `BOBCAT_DIRECTIO
 | 🛑 Annuler | Modal : raison (liste) + précision obligatoire si « Autre ». Statut « Annulée », liseré rouge, tous les boutons désactivés |
 | 👥 Dispatching | Modal 1 : agents ayant voté (1 à 4, ou 1 à 3 avec un superviseur). Puis bouton **Choisir le conducteur** → modal 2 : conducteur (et motard). Le dispatch est mis à jour et « Je suis disponible » devient inutilisable |
 | 📝 Informations | Modifier la radio, le véhicule (plaque si « Autre ») et la tenue |
-| ▶️ Commencer | Statut « En cours... » ; le panneau affiche alors les boutons ci-dessous |
+| ▶️ Commencer | Statut « En cours... » ; le panneau affiche alors les boutons ci-dessous. Il faut au moins **3 personnes** sur le dispatch (CO-ATM + 2 agents, ou CO-ATM + superviseur + 1 agent) |
 
 Le véhicule compte 4 places (CO-ATM et superviseur compris) ; un agent de plus peut suivre en moto s'il a le rôle Unité 2 roues :
 sans superviseur, 3 agents dans le véhicule + 1 en moto ; avec superviseur, 2 agents dans le véhicule + 1 en moto.
@@ -176,7 +183,16 @@ Discord ne permet pas d'ouvrir un modal directement après un autre, d'où le bo
 | 📦 Nouvelle PDS | Modal : nombre de mallettes (1 à 5) + photo de l'emplacement de l'ATM. Envoie la PDS dans `BOBCAT_PDS_ATM_CHANNEL_ID` |
 | 🏁 Finir la session | Statut « Terminée » ; tous les boutons sont désactivés (✏️ des PDS de la session compris) |
 
-### 5. Session non commencée
+### 5. Avant le début de la session
+
+- **30 minutes avant** l'heure prévue, si la session est « En attente... » et pas encore dispatchée :
+  - s'il y a assez d'agents disponibles pour la commencer (2, ou 1 avec un superviseur), le CO-ATM est mentionné dans `BOBCAT_COATM_CHANNEL_ID` pour qu'il fasse son dispatch ;
+  - sinon, la session est **annulée** (manque d'agents) et un message, sans mention, l'indique dans `BOBCAT_COATM_CHANNEL_ID`.
+
+  Cette vérification n'est pas faite pour une session postée moins de 30 minutes avant son heure.
+- **15 minutes avant**, si le dispatching est fait, les agents dispatchés (superviseur compris) sont mentionnés dans le salon des sessions pour un rappel.
+
+### 6. Session non commencée
 
 30 minutes après l'heure prévue, si la session n'a pas commencé, le CO-ATM est mentionné dans `BOBCAT_COATM_CHANNEL_ID`
 avec deux boutons (CO-ATM et direction) :
@@ -184,7 +200,7 @@ avec deux boutons (CO-ATM et direction) :
 - **Maintenu** : le CO-ATM a 10 minutes pour la commencer. Sinon elle est annulée, et les agents ayant voté « Je suis disponible » sont prévenus par un ping dans le salon des sessions ;
 - **Annuler** : même modal que le bouton « Annuler » du panneau.
 
-### 6. PDS ATM
+### 7. PDS ATM
 
 Chaque PDS envoyée affiche la photo de l'emplacement (hébergée sur Cloudinary), l'immatriculation du véhicule de la session,
 les agents du dispatch (en texte, d'après leur surnom sur le serveur, au format `[22] • Yvick Waler`), le nombre de mallettes
@@ -224,6 +240,7 @@ src/
 │   ├── sessionModals.js     # Modals du panneau ⚙️ et des PDS
 │   ├── lifecycle.js         # Annuler / commencer / finir une session, annulation automatique
 │   ├── startCheck.js        # Question « session maintenue ? » 30 min après l'heure prévue
+│   ├── reminders.js         # 30 min avant : dispatching (rappel au CO-ATM ou annulation) ; 15 min avant : rappel aux agents
 │   ├── pds.js               # PDS ATM : message, numéro du jour, photo Cloudinary
 │   ├── supervisorRoles.js   # Retrait des superviseurs ayant perdu le rôle CO-ATM depuis 1h
 │   └── service.js           # Publication, dispatch et logos des agents

@@ -63,6 +63,10 @@ const atmSessionSchema = new Schema(
     cancellation: { type: cancellationSchema, default: null },
     /** Question « session maintenue ? » envoyée dans le salon CO-ATM 30 min après l'heure prévue. */
     startCheck: { type: startCheckSchema, default: null },
+    /** Vérification du dispatching faite 30 min avant l'heure prévue (rappel au CO-ATM ou annulation). */
+    dispatchCheckedAt: { type: Date, default: null },
+    /** Rappel envoyé aux agents dispatchés 15 min avant l'heure prévue. */
+    reminderSentAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

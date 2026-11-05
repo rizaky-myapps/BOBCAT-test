@@ -35,7 +35,10 @@ function renderAlreadyBusy(sessions) {
       ? `🛡️ Tu diriges déjà une session aujourd'hui : ${sessionUrl(session)}`
       : `👥 Tu participes déjà à une session aujourd'hui : ${sessionUrl(session)}`,
   );
-  lines.push('', 'Tu peux quand même en poster une nouvelle avec le bouton ci-dessous.');
+  lines.push(
+    '',
+    'Tu peux quand même en poster une nouvelle avec le bouton ci-dessous, à une heure qui ne chevauche pas tes sessions (une session dure environ 1h30).',
+  );
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n')))

@@ -3,7 +3,7 @@ const AtmSession = require('../models/AtmSession');
 const { CLOSED_STATUSES } = require('../atm/constants');
 const { renderSessionMessage } = require('../atm/message');
 const { renderSessionPanel } = require('../atm/panel');
-const { canManageSession, findSession } = require('../atm/service');
+const { canManageSession, findConflictingSessions, findSession, sessionUrl } = require('../atm/service');
 const { ephemeralText } = require('../utils/v2');
 
 /**
@@ -28,6 +28,18 @@ async function handleAvailableButton(interaction, [id]) {
     return interaction.reply(
       ephemeralText('⛔ Tu es sur le dispatch de cette session : tu ne peux pas te déclarer disponible.'),
     );
+  }
+
+  // Pas de vote pendant une autre session du membre (une session dure environ 1h30).
+  if (!session.available.includes(userId)) {
+    const [conflict] = await findConflictingSessions(session.guildId, userId, session.scheduledAt, session._id);
+    if (conflict) {
+      return interaction.reply(
+        ephemeralText(
+          `⛔ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nUne session dure environ 1h30 : tu ne peux pas voter pour celle-ci.`,
+        ),
+      );
+    }
   }
 
   // Ajout atomique si l'agent n'est pas encore dans la liste…

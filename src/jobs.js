@@ -7,6 +7,7 @@ const {
   SESSION_CHECK_INTERVAL,
 } = require('./atm/constants');
 const { cancelUnstartedSessions } = require('./atm/lifecycle');
+const { checkDispatchDeadlines, sendDispatchReminders } = require('./atm/reminders');
 const { sendStartChecks } = require('./atm/startCheck');
 const { expirePendingRequests } = require('./atm/supervision');
 const { checkSupervisorRoles } = require('./atm/supervisorRoles');
@@ -26,14 +27,17 @@ function every(interval, name, task) {
 
 /**
  * Tâches de fond : brouillons expirés (toutes les 10 min), demandes de supervision sans réponse,
- * superviseurs ayant perdu le rôle CO ATM (retirés après 1h), sessions non commencées
- * (question au CO-ATM 30 min après l'heure prévue, annulation 10 min après « Maintenu »).
+ * superviseurs ayant perdu le rôle CO ATM (retirés après 1h), dispatching (30 min avant l'heure prévue),
+ * rappel aux agents dispatchés (15 min avant), sessions non commencées (question au CO-ATM 30 min après
+ * l'heure prévue, annulation 10 min après « Maintenu »).
  */
 function startJobs(client) {
   every(DRAFT_CLEANUP_INTERVAL, 'Brouillons', deleteExpiredDrafts);
   every(SUPERVISOR_CHECK_INTERVAL, 'Supervision', () => expirePendingRequests(client));
   every(SUPERVISOR_ROLE_CHECK_INTERVAL, 'Superviseurs', () => checkSupervisorRoles(client));
   every(SESSION_CHECK_INTERVAL, 'Sessions', async () => {
+    await checkDispatchDeadlines(client);
+    await sendDispatchReminders(client);
     await sendStartChecks(client);
     await cancelUnstartedSessions(client);
   });

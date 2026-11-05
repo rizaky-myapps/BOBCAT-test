@@ -1,5 +1,5 @@
 const AtmSession = require('../models/AtmSession');
-const { CANCEL_OTHER, CANCEL_REASONS, MAX_MALLETTES, RADIOS, TENUES, VEHICLES } = require('../atm/constants');
+const { CANCEL_OTHER, CANCEL_REASONS, MAX_MALLETTES, MIN_DISPATCH, RADIOS, TENUES, VEHICLES } = require('../atm/constants');
 const { cancelSession, finishSession, startSession } = require('../atm/lifecycle');
 const { FIELDS, getUploadedFiles, truncate } = require('../atm/modals');
 const { renderSessionPanel } = require('../atm/panel');
@@ -248,6 +248,14 @@ async function handleInfoModal(interaction, [id]) {
 async function handleStartButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
+  if (session.dispatch.length < MIN_DISPATCH) {
+    return interaction.update(
+      renderSessionPanel(
+        session,
+        `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM + 2 agents, ou CO-ATM + superviseur + 1 agent). Fais le dispatching.`,
+      ),
+    );
+  }
 
   const started = await startSession(interaction.client, session._id);
   if (!started) return interaction.update(renderSessionPanel(session, STATUS_ERRORS.pending));
