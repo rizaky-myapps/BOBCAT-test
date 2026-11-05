@@ -1,7 +1,7 @@
 const commands = require('../commands');
 const preview = require('./atmPreview');
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
-const { handleSupervisorModal } = require('./supervisor');
+const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
 const { ephemeralText } = require('../utils/v2');
 
 /**
@@ -20,6 +20,9 @@ const componentHandlers = {
   'atm:manage': handleManageButton,
   // /superviseur
   'sup:save': handleSupervisorModal,
+  // Demande de supervision (salon CO-ATM)
+  'sup:accept': handleSupervisorAccept,
+  'sup:refuse': handleSupervisorRefuse,
 };
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

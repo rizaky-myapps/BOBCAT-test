@@ -15,28 +15,34 @@ function getPingMention() {
   return config.roles.employees ? `<@&${config.roles.employees}>` : '@everyone';
 }
 
-/**
- * Logos d'un agent d'après ses rôles :
- * 🛡️ chef d'opération (créateur de la session), 🧳 rôle CO ATM, 🔫 rôle Fusil à pompe.
- */
-function getAgentRoles(member, { isLeader = false } = {}) {
-  const has = (roleId) => Boolean(roleId && member?.roles.cache.has(roleId));
-  const roles = [];
-  if (isLeader) roles.push('chef');
-  if (has(config.roles.coAtm)) roles.push('co_atm');
-  if (has(config.roles.fusilAPompe)) roles.push('pompe');
-  return roles;
+const hasRole = (member, roleId) => Boolean(roleId && member?.roles.cache.has(roleId));
+
+/** Le membre a-t-il le rôle CO ATM ? (il n'a alors pas besoin d'être supervisé) */
+const isCoAtm = (member) => hasRole(member, config.roles.coAtm);
+
+/** Le créateur du brouillon doit-il choisir un superviseur ? */
+function needsSupervisor(guild, draft) {
+  return !isCoAtm(guild.members.cache.get(draft.userId));
+}
+
+/** Superviseur ayant validé sa présence pour ce brouillon, sinon null. */
+function getConfirmedSupervisorId(draft) {
+  const request = draft.supervisorRequest;
+  return request?.status === 'accepted' && request.supervisorId === draft.supervisorId ? draft.supervisorId : null;
 }
 
 /**
  * Agents sur dispatch : n°1 le créateur, n°2 le superviseur s'il y en a un.
  * Les places n°3 et n°4 restent à définir une fois la session postée.
+ * Logos : 🛡️ créateur (chef d'opération), 🧳 superviseur sélectionné, 🔫 rôle Fusil à pompe.
  * @param {import('discord.js').Guild} guild
  */
 function buildDispatch(guild, creatorId, supervisorId) {
-  const dispatch = [{ userId: creatorId, roles: getAgentRoles(guild.members.cache.get(creatorId), { isLeader: true }) }];
+  const shotgun = (userId) => (hasRole(guild.members.cache.get(userId), config.roles.fusilAPompe) ? ['pompe'] : []);
+
+  const dispatch = [{ userId: creatorId, roles: ['chef', ...shotgun(creatorId)] }];
   if (supervisorId && supervisorId !== creatorId) {
-    dispatch.push({ userId: supervisorId, roles: getAgentRoles(guild.members.cache.get(supervisorId)) });
+    dispatch.push({ userId: supervisorId, roles: ['co_atm', ...shotgun(supervisorId)] });
   }
   return dispatch;
 }
@@ -57,6 +63,7 @@ async function fetchAtmChannel(client) {
  */
 async function publishSession(interaction, draft) {
   const channel = await fetchAtmChannel(interaction.client);
+  const supervisorId = getConfirmedSupervisorId(draft);
 
   const session = await AtmSession.create({
     guildId: channel.guildId,
@@ -66,9 +73,9 @@ async function publishSession(interaction, draft) {
     tenue: draft.tenue,
     radio: draft.radio,
     vehicle: resolveVehicle(draft.vehicle, draft.plate),
-    supervisorId: draft.supervisorId,
+    supervisorId,
     pingMention: draft.ping ? getPingMention() : null,
-    dispatch: buildDispatch(interaction.guild, draft.userId, draft.supervisorId),
+    dispatch: buildDispatch(interaction.guild, draft.userId, supervisorId),
   });
 
   try {
@@ -90,6 +97,9 @@ async function findSession(id) {
 module.exports = {
   resolveVehicle,
   getPingMention,
+  isCoAtm,
+  needsSupervisor,
+  getConfirmedSupervisorId,
   buildDispatch,
   publishSession,
   findSession,

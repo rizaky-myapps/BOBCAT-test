@@ -79,12 +79,14 @@ const selectLabel = (label, customId, choices, placeholder, selected) =>
     );
 
 /**
- * Modal « Informations » de l'aperçu /atm (5 questions), pré-rempli avec le brouillon.
+ * Modal « Informations » de l'aperçu /atm, pré-rempli avec le brouillon.
+ * La question « Choix du superviseur » n'apparaît que si `supervisors` est fourni
+ * (créateur sans le rôle CO ATM).
  * @param {import('../models/AtmDraft')} draft
- * @param {{ label: string, value: string }[]} supervisors Superviseurs enregistrés en base.
+ * @param {{ label: string, value: string }[] | null} supervisors Superviseurs enregistrés en base.
  */
 function buildInfoModal(draft, supervisors) {
-  return new ModalBuilder()
+  const modal = new ModalBuilder()
     .setCustomId(`atm:infosub:${draft._id}`)
     .setTitle('Nouvelle session ATM')
     .addLabelComponents(
@@ -92,14 +94,14 @@ function buildInfoModal(draft, supervisors) {
       selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', draft.tenue),
       selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', draft.radio),
       selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule', draft.vehicle),
-      selectLabel(
-        'Choix du superviseur',
-        FIELDS.supervisor,
-        supervisors,
-        'Sélectionne le superviseur',
-        draft.supervisorId,
-      ),
     );
+
+  if (supervisors) {
+    modal.addLabelComponents(
+      selectLabel('Choix du superviseur', FIELDS.supervisor, supervisors, 'Sélectionne le superviseur', draft.supervisorId),
+    );
+  }
+  return modal;
 }
 
 /** Modal « Choisir la plaque » (véhicule « Autre »). */

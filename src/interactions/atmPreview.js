@@ -4,12 +4,16 @@ const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
 const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
 const { FIELDS, buildInfoModal, buildPlateModal, truncate } = require('../atm/modals');
-const { isDraftComplete, renderPreview } = require('../atm/preview');
-const { publishSession } = require('../atm/service');
+const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
+const { isCoAtm, publishSession } = require('../atm/service');
+const { rememberPreview, sendSupervisionRequest, updateRequestMessage } = require('../atm/supervision');
 const { parseDateTime } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
+
+const LOCKED_MESSAGE =
+  '⏳ En attente de la réponse du superviseur : les informations ne sont pas modifiables pour le moment.';
 
 /** Charge le brouillon de l'aperçu ; seul son créateur peut le modifier. */
 async function loadDraft(interaction, id) {
@@ -25,6 +29,12 @@ async function loadDraft(interaction, id) {
   return draft;
 }
 
+/** Met à jour l'aperçu en réponse à l'interaction et retient celle-ci pour les mises à jour ultérieures. */
+async function updatePreview(interaction, draft) {
+  await interaction.update(renderPreview(draft, interaction.guild));
+  rememberPreview(interaction, draft);
+}
+
 /** Superviseurs enregistrés en base, au format des options d'un menu (25 max). */
 async function getSupervisorChoices(guild) {
   const supervisors = await Supervisor.find({ guildId: guild.id }).sort({ name: 1 }).limit(25);
@@ -35,18 +45,23 @@ async function getSupervisorChoices(guild) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Bouton « Informations » → modal à 5 questions                       */
+/* Bouton « Informations » → modal                                     */
 /* ------------------------------------------------------------------ */
 
 async function handleInfoButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
 
-  const supervisors = await getSupervisorChoices(interaction.guild);
-  if (!supervisors.length) {
-    return interaction.reply(
-      ephemeralText('❌ Aucun superviseur enregistré. Utilise la commande `/superviseur` pour en ajouter.'),
-    );
+  // Le choix du superviseur n'est proposé qu'aux membres sans le rôle CO ATM.
+  let supervisors = null;
+  if (!isCoAtm(interaction.member)) {
+    supervisors = await getSupervisorChoices(interaction.guild);
+    if (!supervisors.length) {
+      return interaction.reply(
+        ephemeralText('❌ Aucun superviseur enregistré. Utilise la commande `/superviseur` pour en ajouter.'),
+      );
+    }
   }
   return interaction.showModal(buildInfoModal(draft, supervisors));
 }
@@ -54,30 +69,55 @@ async function handleInfoButton(interaction, [id]) {
 async function handleInfoModal(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
 
   const { fields } = interaction;
   const rawDate = fields.getTextInputValue(FIELDS.date).trim();
   const [tenue] = fields.getStringSelectValues(FIELDS.tenue);
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
-  const [supervisorId] = fields.getStringSelectValues(FIELDS.supervisor);
+  const withSupervisor = !isCoAtm(interaction.member);
+  const supervisorId =
+    withSupervisor && fields.fields.has(FIELDS.supervisor) ? fields.getStringSelectValues(FIELDS.supervisor)[0] : null;
 
-  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle) || !supervisorId) {
+  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle) || (withSupervisor && !supervisorId)) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
 
   const scheduledAt = parseDateTime(rawDate, config.timezone);
-  draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
-  await draft.save();
+  const previous = draft.supervisorRequest;
+  // Une présence déjà validée reste valable tant que le même superviseur est choisi.
+  const keepRequest = Boolean(supervisorId && previous?.status === 'accepted' && previous.supervisorId === supervisorId);
 
-  await interaction.update(renderPreview(draft, interaction.guild));
-  if (!scheduledAt) {
-    await interaction.followUp(
-      ephemeralText(
-        `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
-      ),
-    );
+  if (!keepRequest && previous?.status === 'accepted') {
+    await updateRequestMessage(interaction.client, draft, { ...previous.toObject(), status: 'cancelled' });
   }
+
+  draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
+  if (!keepRequest) draft.supervisorRequest = null;
+
+  const notices = [];
+  if (!scheduledAt) {
+    notices.push(
+      `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
+    );
+    if (supervisorId) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
+  } else if (supervisorId && !keepRequest) {
+    try {
+      draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
+      notices.push(
+        `📨 Demande envoyée à <@${supervisorId}> dans <#${draft.supervisorRequest.channelId}>.`,
+        "Les informations ne sont plus modifiables jusqu'à sa réponse (10 minutes maximum).",
+      );
+    } catch (error) {
+      console.error('[Supervision] Envoi de la demande impossible :', error);
+      notices.push(`❌ Impossible d'envoyer la demande au superviseur : ${error.message}.`);
+    }
+  }
+
+  await draft.save();
+  await updatePreview(interaction, draft);
+  if (notices.length) await interaction.followUp(ephemeralText(notices.join('\n')));
 }
 
 /* ------------------------------------------------------------------ */
@@ -87,16 +127,18 @@ async function handleInfoModal(interaction, [id]) {
 async function handlePlateButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
   return interaction.showModal(buildPlateModal(draft));
 }
 
 async function handlePlateModal(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
 
   draft.plate = interaction.fields.getTextInputValue(FIELDS.vehicleOther).trim();
   await draft.save();
-  return interaction.update(renderPreview(draft, interaction.guild));
+  return updatePreview(interaction, draft);
 }
 
 /* ------------------------------------------------------------------ */
@@ -109,7 +151,7 @@ async function handlePingButton(interaction, [id]) {
 
   draft.ping = !draft.ping;
   await draft.save();
-  return interaction.update(renderPreview(draft, interaction.guild));
+  return updatePreview(interaction, draft);
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,8 +161,12 @@ async function handlePingButton(interaction, [id]) {
 async function handleSendButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
-  if (!isDraftComplete(draft)) {
-    return interaction.reply(ephemeralText("❌ Complète toutes les informations avant d'envoyer la session."));
+  if (!isDraftComplete(draft, interaction.guild)) {
+    return interaction.reply(
+      ephemeralText(
+        "❌ Complète toutes les informations avant d'envoyer la session (et attends la validation du superviseur).",
+      ),
+    );
   }
 
   // Suppression atomique : empêche un double envoi en cas de double clic.

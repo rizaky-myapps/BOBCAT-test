@@ -6,6 +6,7 @@ assertConfig(['discord.token', 'channels.sessionAtm', 'mongo.uri']);
 const { connectDatabase, disconnectDatabase } = require('./database/mongoose');
 const { handleInteraction } = require('./interactions');
 const { deployCommands } = require('./commands/deploy');
+const { startJobs } = require('./jobs');
 
 // GuildMembers (intent privilégié) : nécessaire pour lister les membres ayant le rôle superviseur (/superviseur).
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
@@ -27,6 +28,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   readyClient.user.setActivity('les ATM', { type: ActivityType.Watching });
   await deployCommands(readyClient);
   await cacheGuildMembers(readyClient);
+  startJobs(readyClient);
 });
 
 client.on(Events.InteractionCreate, handleInteraction);

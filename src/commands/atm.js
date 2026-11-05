@@ -1,6 +1,7 @@
 const { InteractionContextType, MessageFlags, SlashCommandBuilder } = require('discord.js');
 const AtmDraft = require('../models/AtmDraft');
 const { renderPreview } = require('../atm/preview');
+const { rememberPreview } = require('../atm/supervision');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,5 +18,6 @@ module.exports = {
     const draft = (await AtmDraft.findOne(owner).sort({ createdAt: -1 })) ?? (await AtmDraft.create(owner));
     const preview = renderPreview(draft, interaction.guild);
     await interaction.reply({ ...preview, flags: preview.flags | MessageFlags.Ephemeral });
+    rememberPreview(interaction, draft);
   },
 };

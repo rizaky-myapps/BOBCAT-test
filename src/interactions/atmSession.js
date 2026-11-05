@@ -22,8 +22,13 @@ async function handleAvailableButton(interaction, [id]) {
   );
   const joined = Boolean(updated);
 
-  // … sinon on le retire de la liste.
+  // … sinon on le retire de la liste, sauf s'il est sur le dispatch.
   if (!joined) {
+    if (session.dispatch.some((agent) => agent.userId === userId)) {
+      return interaction.reply(
+        ephemeralText('⛔ Tu es sur le dispatch de cette session : tu ne peux pas te retirer de la liste.'),
+      );
+    }
     updated = await AtmSession.findByIdAndUpdate(
       session._id,
       { $pull: { available: userId } },

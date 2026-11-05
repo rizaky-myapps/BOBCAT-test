@@ -47,6 +47,16 @@ const AGENT_ROLES = [
 /** Nombre de lignes affichées au minimum dans « Agents sur dispatch ». */
 const DISPATCH_MIN_LINES = 4;
 
+const MINUTE = 60 * 1000;
+/** Délai de réponse du superviseur sollicité ; sans réponse, la demande est considérée comme refusée. */
+const SUPERVISOR_RESPONSE_DELAY = 10 * MINUTE;
+/** Fréquence de vérification des demandes de supervision sans réponse. */
+const SUPERVISOR_CHECK_INTERVAL = 30 * 1000;
+/** Durée de vie d'un brouillon non envoyé. */
+const DRAFT_LIFETIME = 5 * 60 * MINUTE;
+/** Fréquence de suppression des brouillons expirés. */
+const DRAFT_CLEANUP_INTERVAL = 10 * MINUTE;
+
 const findLabel = (list, value) => list.find((item) => item.value === value)?.label ?? value;
 
 module.exports = {
@@ -58,5 +68,9 @@ module.exports = {
   CLOSED_STATUSES,
   AGENT_ROLES,
   DISPATCH_MIN_LINES,
+  SUPERVISOR_RESPONSE_DELAY,
+  SUPERVISOR_CHECK_INTERVAL,
+  DRAFT_LIFETIME,
+  DRAFT_CLEANUP_INTERVAL,
   findLabel,
 };

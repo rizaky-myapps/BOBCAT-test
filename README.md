@@ -37,12 +37,13 @@ Remplis ensuite le fichier `.env` :
 | `BOBCAT_DISCORD_BOT_TOKEN` | ✅ | Token du bot |
 | `BOBCAT_GUILD_ID` | | Serveur où les commandes sont enregistrées au démarrage (instantané). Vide = commandes globales (jusqu'à 1h de propagation) |
 | `BOBCAT_DIRECTION_ROLE_ID` | | Pas encore utilisé |
-| `BOBCAT_CO_ATM_ROLE_ID` | ✅ (`/superviseur`) | Membres proposés dans `/superviseur` · logo 🧳 sur le dispatch |
+| `BOBCAT_CO_ATM_ROLE_ID` | ✅ (`/superviseur`) | Membres proposés dans `/superviseur` · les membres ayant ce rôle n'ont pas besoin de superviseur |
 | `BOBCAT_EMPLOYEES_ROLE_ID` | | Rôle mentionné quand « Ping agents » est sur OUI. Vide = `@everyone` |
 | `BOBCAT_UNITE_2_ROUES_ROLE_ID` · `BOBCAT_UNITE_K9_ROLE_ID` · `BOBCAT_RECRUTEUR_ROLE_ID` · `BOBCAT_FORMATEUR_ROLE_ID` | | Pas encore utilisés |
 | `BOBCAT_FUSIL_A_POMPE_ROLE_ID` | | Logo 🔫 sur le dispatch |
 | `BOBCAT_FUSIL_ANTI_EMEUTE_ROLE_ID` | | Pas encore utilisé |
 | `BOBCAT_SESSION_ATM_CHANNEL_ID` | ✅ | Salon où les sessions ATM sont publiées |
+| `BOBCAT_COATM_CHANNEL_ID` | ✅ (supervision) | Salon où le superviseur sélectionné est prévenu et répond |
 | `BOBCAT_PDS_ATM_CHANNEL_ID` · `BOBCAT_PDS_PATROUILLE_CHANNEL_ID` | | Pas encore utilisés |
 | `MONGODB_URI` | ✅ | URI de connexion MongoDB |
 | `MONGODB_FOLDER` | | Nom de la base MongoDB |
@@ -60,6 +61,7 @@ Au démarrage, le bot enregistre (ou met à jour) automatiquement les commandes 
 ### Permissions du bot
 
 Dans le salon `BOBCAT_SESSION_ATM_CHANNEL_ID`, le bot a besoin de : **Voir le salon**, **Envoyer des messages** et, pour le ping, **Mentionner @everyone, @here et tous les rôles** (ou un `BOBCAT_EMPLOYEES_ROLE_ID` mentionnable).
+Dans le salon `BOBCAT_COATM_CHANNEL_ID` : **Voir le salon** et **Envoyer des messages**.
 
 **Intent privilégié obligatoire** : active **Server Members Intent** dans le portail développeur
 (*ton application → Bot → Privileged Gateway Intents*). Il sert à lister les membres ayant un rôle (CO ATM, Fusil à pompe…).
@@ -82,10 +84,10 @@ Les superviseurs déjà enregistrés sont pré-sélectionnés : la sélection va
 
 | Bouton | Action |
 | --- | --- |
-| 📝 Informations | Ouvre le modal à 5 questions (pré-rempli si tu l'as déjà rempli) |
+| 📝 Informations | Ouvre le modal des informations (pré-rempli si tu l'as déjà rempli) |
 | 🚙 Choisir la plaque | Affiché seulement si « Autre » est choisi comme véhicule : ouvre un modal pour saisir la plaque |
 | 🔔 Ping agents : OUI / 🔕 NON | Active ou désactive le ping des agents (OUI par défaut) |
-| 📨 Envoyer | Publie la session dans `BOBCAT_SESSION_ATM_CHANNEL_ID`. Actif une fois toutes les informations renseignées |
+| 📨 Envoyer | Publie la session dans `BOBCAT_SESSION_ATM_CHANNEL_ID`. Actif une fois toutes les informations renseignées (et la présence du superviseur validée) |
 
 Le modal « Informations » contient :
 
@@ -95,10 +97,23 @@ Le modal « Informations » contient :
 | Choix de la tenue | Menu de sélection | CDF/ATM Long, CDF/ATM Court |
 | Fréquence radio | Menu de sélection | Sierra 6, Sierra 7, Sierra 8 |
 | Choix du véhicule | Menu de sélection | ZJR 325, ABC 123, Autre |
-| Choix du superviseur | Menu de sélection | Superviseurs enregistrés via `/superviseur` |
+| Choix du superviseur | Menu de sélection | Superviseurs enregistrés via `/superviseur` — **uniquement si tu n'as pas le rôle CO ATM** |
 
-L'aperçu est mis à jour à chaque modification. Le brouillon est conservé en base pendant 24h :
-si tu relances `/atm` entre-temps, ton brouillon est réutilisé. Seul son créateur peut le modifier.
+L'aperçu est mis à jour à chaque modification. Si tu relances `/atm`, ton brouillon est réutilisé. Seul son créateur peut le modifier.
+Un brouillon non envoyé est supprimé 5h après sa création (vérification toutes les 10 minutes).
+
+#### Validation du superviseur
+
+Si tu n'as pas le rôle CO ATM, le superviseur sélectionné doit valider sa présence avant que la session puisse être envoyée :
+
+1. Une demande est envoyée dans le salon `BOBCAT_COATM_CHANNEL_ID` (le superviseur est mentionné), avec les boutons **✅ Je suis disponible** et **❌ Pas disponible**. Seul le superviseur sélectionné peut y répondre.
+2. Tant qu'il n'a pas répondu, les boutons **Informations** et **Choisir la plaque** de l'aperçu sont désactivés.
+3. **Disponible** : sa présence est validée, le bouton **Envoyer** s'active.
+4. **Pas disponible**, ou **pas de réponse dans les 10 minutes** (compté comme un refus) : le superviseur est retiré, choisis-en un autre via **Informations**.
+
+Tu es prévenu de sa réponse par un message, et ton aperçu se met à jour. Si l'aperçu a été ouvert il y a plus de 15 minutes, relance `/atm` pour le voir à jour.
+Si tu changes de superviseur après une validation, l'ancienne demande est annulée et une nouvelle est envoyée.
+Si la date est invalide, la demande n'est envoyée qu'une fois la date corrigée.
 
 ### 3. L'annonce
 
@@ -115,12 +130,12 @@ Logos à côté des agents sur dispatch :
 | Logo | Attribué à |
 | --- | --- |
 | 🛡️ | Créateur de la session (chef d'opération) |
-| 🧳 | Membre ayant le rôle `BOBCAT_CO_ATM_ROLE_ID` |
+| 🧳 | Superviseur sélectionné |
 | 🔫 | Membre ayant le rôle `BOBCAT_FUSIL_A_POMPE_ROLE_ID` |
 
 Les mentions du message (superviseur, agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
 
-**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire.
+**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire. Les agents sur le dispatch ne peuvent pas se retirer.
 
 ### 4. Le bouton ⚙️
 
@@ -132,7 +147,8 @@ Seul le créateur de la session peut l'utiliser ; il répond « 🚧 En dévelop
 
 ```
 src/
-├── index.js                 # Démarrage du bot (MongoDB, client Discord, enregistrement des commandes)
+├── index.js                 # Démarrage du bot (MongoDB, client Discord, enregistrement des commandes, tâches de fond)
+├── jobs.js                  # Tâches de fond : brouillons expirés, demandes de supervision sans réponse
 ├── config.js                # Lecture / validation du .env
 ├── commands/
 │   ├── index.js             # Liste des commandes
@@ -142,17 +158,18 @@ src/
 ├── interactions/
 │   ├── index.js             # Routage des commandes, boutons, menus et modals
 │   ├── atmPreview.js        # Boutons et modals de l'aperçu /atm (informations, plaque, ping, envoi)
-│   ├── supervisor.js        # Enregistrement des superviseurs (modal /superviseur)
+│   ├── supervisor.js        # Modal /superviseur et réponses du superviseur (salon CO-ATM)
 │   └── atmSession.js        # Boutons « Je suis disponible » et ⚙️
 ├── atm/
 │   ├── constants.js         # Choix des menus, statuts, rôles de la légende, limites
 │   ├── modals.js            # Construction des modals
 │   ├── message.js           # Rendu de l'annonce (Components V2)
 │   ├── preview.js           # Rendu de l'aperçu /atm
+│   ├── supervision.js       # Demande de supervision (message CO-ATM, délai de 10 min, mise à jour de l'aperçu)
 │   └── service.js           # Publication, dispatch et logos des agents
 ├── models/
 │   ├── AtmSession.js        # Collection « Sessions-ATM » : sessions publiées
-│   ├── AtmDraft.js          # Collection « Sessions-ATM-Draft » : brouillons /atm (expirent après 24h)
+│   ├── AtmDraft.js          # Collection « Sessions-ATM-Draft » : brouillons /atm (supprimés après 5h)
 │   └── Supervisor.js        # Collection « Superviseur-List » : superviseurs (/superviseur)
 ├── services/cloudinary.js   # Envoi / suppression d'images sur Cloudinary (pas encore utilisé)
 ├── database/mongoose.js     # Connexion MongoDB
