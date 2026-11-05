@@ -24,9 +24,15 @@ const MAX_AVAILABLE_SHOWN = 60;
 /** Valeur affichée tant qu'une information n'est pas renseignée (aperçu). */
 const EMPTY = '...';
 
+/** Ordre des logos à côté d'un agent : celui du fusil à pompe toujours en dernier. */
+const DISPATCH_EMOJI_ORDER = [
+  ...AGENT_ROLES.filter((role) => role.value !== 'pompe'),
+  ...AGENT_ROLES.filter((role) => role.value === 'pompe'),
+];
+
 function formatDispatchLines(dispatch) {
   const lines = dispatch.map((agent) => {
-    const emojis = AGENT_ROLES.filter((role) => agent.roles.includes(role.value)).map((role) => role.emoji);
+    const emojis = DISPATCH_EMOJI_ORDER.filter((role) => agent.roles.includes(role.value)).map((role) => role.emoji);
     return `> - <@${agent.userId}>${emojis.length ? ` ${emojis.join(' ')}` : ''}`;
   });
   while (lines.length < DISPATCH_MIN_LINES) lines.push(`> - ${EMPTY}`);
