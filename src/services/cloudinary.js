@@ -13,26 +13,31 @@ if (enabled) {
 const isCloudinaryEnabled = () => enabled;
 
 /**
- * Rognage carré centré, sans redimensionnement : le carré a pour côté la plus petite dimension de l'image.
+ * Rognage carré centré, sans redimensionnement : le carré a pour côté `ratio` × la plus petite dimension de l'image.
  * Le centre de l'image (ex : la croix du curseur sur une capture de la carte) reste au centre.
+ * @returns {object[]} Transformations Cloudinary.
  */
-function squareCropTransformation(width, height) {
+function squareCropTransformation(width, height, ratio = 1) {
   if (width && height) {
-    const side = Math.min(width, height);
-    return { crop: 'crop', gravity: 'center', width: side, height: side };
+    const side = Math.floor(Math.min(width, height) * ratio);
+    return [{ crop: 'crop', gravity: 'center', width: side, height: side }];
   }
-  return { crop: 'crop', gravity: 'center', aspect_ratio: '1:1' };
+  // Dimensions inconnues : plus grand carré centré, puis réduit au ratio demandé (toujours centré).
+  const transformation = [{ crop: 'crop', gravity: 'center', aspect_ratio: '1:1' }];
+  if (ratio < 1) transformation.push({ crop: 'crop', gravity: 'center', width: ratio, height: ratio });
+  return transformation;
 }
 
 /**
  * Télécharge une image (ex : pièce jointe Discord, dont l'URL expire) et l'enregistre sur Cloudinary.
  * @param {string} url URL de l'image à sauvegarder.
  * @param {string} subFolder Sous-dossier (ex : identifiant de la session).
- * @param {{ squareCrop?: boolean, width?: number|null, height?: number|null }} [options]
- *   squareCrop : rogne l'image au format 1:1 (centré, sans la redimensionner) avant de l'enregistrer.
+ * @param {{ squareCrop?: boolean, cropRatio?: number, width?: number|null, height?: number|null }} [options]
+ *   squareCrop : rogne l'image au format 1:1 (centré, sans la redimensionner) avant de l'enregistrer ;
+ *   cropRatio : taille du carré par rapport à la plus petite dimension de l'image (1 = plus grand carré possible).
  * @returns {Promise<{ url: string, publicId: string }>}
  */
-async function uploadImageFromUrl(url, subFolder, { squareCrop = false, width = null, height = null } = {}) {
+async function uploadImageFromUrl(url, subFolder, { squareCrop = false, cropRatio = 1, width = null, height = null } = {}) {
   if (!enabled) throw new Error('Cloudinary n\'est pas configuré.');
 
   const response = await fetch(url);
@@ -41,7 +46,7 @@ async function uploadImageFromUrl(url, subFolder, { squareCrop = false, width = 
 
   const result = await new Promise((resolve, reject) => {
     const uploadOptions = { folder: `${baseFolder}/${subFolder}`, resource_type: 'image' };
-    if (squareCrop) uploadOptions.transformation = [squareCropTransformation(width, height)];
+    if (squareCrop) uploadOptions.transformation = squareCropTransformation(width, height, cropRatio);
     const stream = cloudinary.uploader.upload_stream(
       uploadOptions,
       (error, uploadResult) => (error ? reject(error) : resolve(uploadResult)),

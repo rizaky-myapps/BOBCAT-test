@@ -11,6 +11,7 @@ const {
 } = require('discord.js');
 const PdsAtm = require('../models/PdsAtm');
 const { config } = require('../config');
+const { PDS_CROP_RATIO } = require('./constants');
 const { sessionUrl } = require('./service');
 const { deleteImage, uploadImageFromUrl } = require('../services/cloudinary');
 const { dayKey, formatDate } = require('../utils/date');
@@ -83,8 +84,16 @@ function renderPdsMessage(pds, session) {
   return { flags: MessageFlags.IsComponentsV2, components: [container], allowedMentions: { parse: [] } };
 }
 
-/** Photos des PDS : rognées au format 1:1, centrées (la croix de la carte reste au centre), sans redimensionnement. */
-const squareCrop = (attachment) => ({ squareCrop: true, width: attachment.width, height: attachment.height });
+/**
+ * Photos des PDS : rognées au format 1:1, centrées (la croix de la carte reste au centre), sans redimensionnement,
+ * en excluant le HUD de la carte.
+ */
+const squareCrop = (attachment) => ({
+  squareCrop: true,
+  cropRatio: PDS_CROP_RATIO,
+  width: attachment.width,
+  height: attachment.height,
+});
 
 async function fetchPdsChannel(client) {
   const channelId = config.channels.pdsAtm;

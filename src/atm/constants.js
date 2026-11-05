@@ -57,6 +57,12 @@ const VEHICLE_CAPACITY = 4;
 /** Nombre minimum de personnes sur le dispatch pour commencer (CO-ATM compris). */
 const MIN_DISPATCH = 3;
 
+/**
+ * Taille du carré des photos de PDS par rapport à la hauteur de la capture : assez petit pour exclure
+ * le HUD de la carte (barre d'instructions en bas, légende à droite), centré sur la croix.
+ */
+const PDS_CROP_RATIO = 0.8;
+
 /** Nombre de mallettes proposé dans le modal « Nouvelle PDS ». */
 const MAX_MALLETTES = 5;
 
@@ -121,6 +127,7 @@ module.exports = {
   VEHICLE_CAPACITY,
   MIN_DISPATCH,
   MAX_MALLETTES,
+  PDS_CROP_RATIO,
   AGENT_ROLES,
   DISPATCH_MIN_LINES,
   SUPERVISOR_RESPONSE_DELAY,
