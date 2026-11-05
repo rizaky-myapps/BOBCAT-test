@@ -1,5 +1,6 @@
-const { InteractionContextType, SlashCommandBuilder } = require('discord.js');
-const { buildCreateModal } = require('../atm/modals');
+const { InteractionContextType, MessageFlags, SlashCommandBuilder } = require('discord.js');
+const AtmDraft = require('../models/AtmDraft');
+const { renderPreview } = require('../atm/preview');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,8 +8,10 @@ module.exports = {
     .setDescription("Créer une session de ravitaillement d'ATM")
     .setContexts(InteractionContextType.Guild),
 
-  /** @param {import('discord.js').ChatInputCommandInteraction} interaction */
+  /** Envoie l'aperçu (éphémère) du message de session, configurable via ses boutons. */
   async execute(interaction) {
-    await interaction.showModal(buildCreateModal());
+    const draft = await AtmDraft.create({ guildId: interaction.guildId, userId: interaction.user.id });
+    const preview = renderPreview(draft);
+    await interaction.reply({ ...preview, flags: preview.flags | MessageFlags.Ephemeral });
   },
 };

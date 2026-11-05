@@ -1,18 +1,15 @@
-const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
 const { CLOSED_STATUSES } = require('../atm/constants');
 const { renderSessionMessage } = require('../atm/message');
-const { renderPanel } = require('../atm/panel');
-const { canManageSession, findSession } = require('../atm/service');
-
-const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
+const { findSession } = require('../atm/service');
+const { ephemeralText } = require('../utils/v2');
 
 /** Bouton « Je suis disponible » : ajoute / retire l'agent de la liste. */
 async function handleAvailableButton(interaction, [id]) {
   const session = await findSession(id);
-  if (!session) return interaction.reply(ephemeral('❌ Cette session est introuvable.'));
+  if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
   if (CLOSED_STATUSES.includes(session.status)) {
-    return interaction.reply(ephemeral('🔒 Cette session est clôturée.'));
+    return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
   }
 
   const userId = interaction.user.id;
@@ -36,7 +33,7 @@ async function handleAvailableButton(interaction, [id]) {
 
   await interaction.update(renderSessionMessage(updated));
   await interaction.followUp(
-    ephemeral(
+    ephemeralText(
       joined
         ? '✅ Tu es maintenant dans la liste des agents disponibles. Reclique sur le bouton pour te retirer.'
         : '↩️ Tu as été retiré de la liste des agents disponibles.',
@@ -44,16 +41,9 @@ async function handleAvailableButton(interaction, [id]) {
   );
 }
 
-/** Bouton ⚙️ : ouvre le panneau de gestion (réservé au créateur et aux responsables). */
-async function handleManageButton(interaction, [id]) {
-  const session = await findSession(id);
-  if (!session) return interaction.reply(ephemeral('❌ Cette session est introuvable.'));
-  if (!canManageSession(interaction, session)) {
-    return interaction.reply(ephemeral('⛔ Seul le créateur de la session ou un responsable peut la gérer.'));
-  }
-
-  const panel = renderPanel(session);
-  return interaction.reply({ ...panel, flags: panel.flags | MessageFlags.Ephemeral });
+/** Bouton ⚙️ (en haut à droite du message). */
+async function handleManageButton(interaction) {
+  return interaction.reply(ephemeralText('🚧 En développement'));
 }
 
 module.exports = { handleAvailableButton, handleManageButton };

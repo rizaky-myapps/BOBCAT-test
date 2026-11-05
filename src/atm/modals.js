@@ -6,15 +6,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const {
-  AGENT_ROLES,
-  PING_CHOICES,
-  RADIOS,
-  TENUES,
-  VEHICLES,
-  VEHICLE_OTHER,
-} = require('./constants');
-const { encodeDraft } = require('./draft');
+const { AGENT_ROLES, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('./constants');
 const { formatDateTime } = require('../utils/date');
 
 /** Identifiants des champs des modals. */
@@ -24,7 +16,8 @@ const FIELDS = {
   radio: 'radio',
   vehicle: 'vehicule',
   vehicleOther: 'vehicule_autre',
-  ping: 'ping',
+  supervisor: 'superviseur',
+  supervisors: 'superviseurs',
   photos: 'photos',
   rolePrefix: 'role_',
 };
@@ -89,40 +82,67 @@ const selectLabel = (label, customId, choices, placeholder, selected) =>
         ),
     );
 
-/** Modal ouvert par /atm. */
-function buildCreateModal() {
+/**
+ * Modal « Informations » de l'aperçu /atm (5 questions), pré-rempli avec le brouillon.
+ * @param {import('../models/AtmDraft')} draft
+ * @param {{ label: string, value: string }[]} supervisors Superviseurs enregistrés en base.
+ */
+function buildInfoModal(draft, supervisors) {
   return new ModalBuilder()
-    .setCustomId('atm:create')
+    .setCustomId(`atm:infosub:${draft._id}`)
     .setTitle('Nouvelle session ATM')
     .addLabelComponents(
-      dateLabel(),
-      selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue'),
-      selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio'),
-      selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule'),
-      selectLabel('Ping employés ?', FIELDS.ping, PING_CHOICES, 'Mentionner les employés ?'),
+      dateLabel(draft.rawDate),
+      selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', draft.tenue),
+      selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', draft.radio),
+      selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule', draft.vehicle),
+      selectLabel(
+        'Choix du superviseur',
+        FIELDS.supervisor,
+        supervisors,
+        'Sélectionne le superviseur',
+        draft.supervisorId,
+      ),
+    );
+}
+
+/** Modal « Choisir la plaque » (véhicule « Autre »). */
+function buildPlateModal(draft) {
+  return new ModalBuilder()
+    .setCustomId(`atm:platesub:${draft._id}`)
+    .setTitle('Véhicule utilisé')
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Plaque du véhicule')
+        .setDescription('Renseigne la plaque du véhicule utilisé pour la session.')
+        .setTextInputComponent(vehicleOtherInput(draft.plate, true)),
     );
 }
 
 /**
- * 2e modal : demande le véhicule (option « Autre ») et/ou une date corrigée.
- * @param {ReturnType<import('./draft').decodeDraft>} draft
- * @param {{ needDate: boolean, needVehicle: boolean }} needs
+ * Modal de /superviseur : liste des membres ayant le rôle superviseur.
+ * Les superviseurs déjà enregistrés sont pré-sélectionnés.
+ * @param {{ label: string, value: string, description?: string, default: boolean }[]} options
+ * @param {string} roleName
  */
-function buildDetailsModal(draft, { needDate, needVehicle }) {
-  const modal = new ModalBuilder()
-    .setCustomId(`atm:moresub:${encodeDraft(draft)}`)
-    .setTitle(needVehicle ? 'Véhicule utilisé' : 'Correction de la date');
-
-  if (needDate) modal.addLabelComponents(dateLabel(draft.rawDate));
-  if (needVehicle) {
-    modal.addLabelComponents(
+function buildSupervisorModal(options, roleName) {
+  return new ModalBuilder()
+    .setCustomId('sup:save')
+    .setTitle('Superviseurs')
+    .addLabelComponents(
       new LabelBuilder()
-        .setLabel('Véhicule utilisé')
-        .setDescription('Renseigne le véhicule (modèle / plaque) utilisé pour la session.')
-        .setTextInputComponent(vehicleOtherInput('', true)),
+        .setLabel('Liste des superviseurs')
+        .setDescription(truncate(`Membres ayant le rôle « ${roleName} »`, 100))
+        .setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId(FIELDS.supervisors)
+            .setPlaceholder('Sélectionne les superviseurs')
+            .setRequired(false)
+            .setMinValues(0)
+            .setMaxValues(options.length)
+            .addOptions(options),
+        ),
     );
-  }
-  return modal;
 }
 
 /** Modal « Modifier les infos » (bouton du panneau ⚙️). */
@@ -199,8 +219,10 @@ function buildPhotoModal(session, remaining) {
 
 module.exports = {
   FIELDS,
-  buildCreateModal,
-  buildDetailsModal,
+  truncate,
+  buildInfoModal,
+  buildPlateModal,
+  buildSupervisorModal,
   buildEditModal,
   buildRolesModal,
   buildPhotoModal,

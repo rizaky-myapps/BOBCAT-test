@@ -5,10 +5,15 @@ const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
 const { VEHICLES, VEHICLE_OTHER } = require('./constants');
 
-/** Libellé du véhicule à partir de la valeur du menu (ou du texte libre pour « Autre »). */
-function resolveVehicle(value, otherText) {
-  if (value === VEHICLE_OTHER) return otherText?.trim() || null;
+/** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
+function resolveVehicle(value, plate) {
+  if (value === VEHICLE_OTHER) return plate?.trim() || null;
   return VEHICLES.find((vehicle) => vehicle.value === value)?.label ?? null;
+}
+
+/** Mention utilisée quand le ping des agents est activé : rôle du .env, sinon @everyone. */
+function getPingMention() {
+  return config.atm.pingRoleId ? `<@&${config.atm.pingRoleId}>` : '@everyone';
 }
 
 async function fetchAtmChannel(client) {
@@ -20,37 +25,27 @@ async function fetchAtmChannel(client) {
 }
 
 /**
- * Crée la session en base puis publie le message dans le salon ATM.
- * @returns {Promise<{ session: import('mongoose').Document, message: import('discord.js').Message }>}
+ * Crée la session en base à partir du brouillon de l'aperçu, puis publie le message dans le salon ATM.
+ * @param {import('discord.js').Interaction} interaction
+ * @param {import('../models/AtmDraft')} draft
  */
-async function publishSession(interaction, { scheduledAt, tenue, radio, vehicle, ping }) {
+async function publishSession(interaction, draft) {
   const channel = await fetchAtmChannel(interaction.client);
-
-  let pingMention = null;
-  let allowedMentions = { parse: [] };
-  if (ping === 'oui') {
-    if (config.atm.pingRoleId) {
-      pingMention = `<@&${config.atm.pingRoleId}>`;
-      allowedMentions = { roles: [config.atm.pingRoleId] };
-    } else {
-      pingMention = '@everyone';
-      allowedMentions = { parse: ['everyone'] };
-    }
-  }
 
   const session = await AtmSession.create({
     guildId: channel.guildId,
     channelId: channel.id,
     creatorId: interaction.user.id,
-    scheduledAt,
-    tenue,
-    radio,
-    vehicle,
-    pingMention,
+    scheduledAt: draft.scheduledAt,
+    tenue: draft.tenue,
+    radio: draft.radio,
+    vehicle: resolveVehicle(draft.vehicle, draft.plate),
+    supervisorId: draft.supervisorId,
+    pingMention: draft.ping ? getPingMention() : null,
   });
 
   try {
-    const message = await channel.send({ ...renderSessionMessage(session), allowedMentions });
+    const message = await channel.send(renderSessionMessage(session));
     session.messageId = message.id;
     await session.save();
     return { session, message };
@@ -63,10 +58,7 @@ async function publishSession(interaction, { scheduledAt, tenue, radio, vehicle,
 /** Met à jour le message public d'une session après une modification. */
 async function syncSessionMessage(client, session) {
   const channel = await client.channels.fetch(session.channelId);
-  await channel.messages.edit(session.messageId, {
-    ...renderSessionMessage(session),
-    allowedMentions: { parse: [] },
-  });
+  await channel.messages.edit(session.messageId, renderSessionMessage(session));
 }
 
 /**
@@ -89,6 +81,7 @@ async function findSession(id) {
 
 module.exports = {
   resolveVehicle,
+  getPingMention,
   publishSession,
   syncSessionMessage,
   canManageSession,

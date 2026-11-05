@@ -1,4 +1,3 @@
-const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
 const { config } = require('../config');
 const {
@@ -15,8 +14,7 @@ const { renderPanel } = require('../atm/panel');
 const { canManageSession, findSession, resolveVehicle, syncSessionMessage } = require('../atm/service');
 const { deleteImage, isCloudinaryEnabled, uploadImageFromUrl } = require('../services/cloudinary');
 const { parseDateTime } = require('../utils/date');
-
-const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
+const { ephemeralText: ephemeral } = require('../utils/v2');
 const AFTER = { returnDocument: 'after' };
 
 /** Charge la session et vérifie les droits ; répond à l'utilisateur et renvoie null sinon. */

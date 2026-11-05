@@ -1,21 +1,27 @@
-const { MessageFlags } = require('discord.js');
 const commands = require('../commands');
-const { handleCreateModal, handleMoreButton, handleMoreModal } = require('./atmCreate');
+const preview = require('./atmPreview');
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
+const { handleSupervisorModal } = require('./supervisor');
 const panel = require('./atmPanel');
+const { ephemeralText } = require('../utils/v2');
 
 /**
- * Routage des composants / modals par préfixe de custom_id ("atm:<action>:<arguments...>").
+ * Routage des composants / modals par préfixe de custom_id ("<namespace>:<action>:<arguments...>").
  */
 const componentHandlers = {
-  // Création (/atm)
-  'atm:create': handleCreateModal,
-  'atm:more': handleMoreButton,
-  'atm:moresub': handleMoreModal,
+  // Aperçu de /atm
+  'atm:info': preview.handleInfoButton,
+  'atm:infosub': preview.handleInfoModal,
+  'atm:plate': preview.handlePlateButton,
+  'atm:platesub': preview.handlePlateModal,
+  'atm:ping': preview.handlePingButton,
+  'atm:send': preview.handleSendButton,
   // Message public de la session
   'atm:dispo': handleAvailableButton,
   'atm:manage': handleManageButton,
-  // Panneau de gestion ⚙️
+  // /superviseur
+  'sup:save': handleSupervisorModal,
+  // Panneau de gestion (plus accessible : le bouton ⚙️ affiche « En développement »)
   'atm:dispatch': panel.handleDispatchSelect,
   'atm:status': panel.handleStatusSelect,
   'atm:roles': panel.handleRolesButton,
@@ -50,7 +56,7 @@ async function handleInteraction(interaction) {
     console.error(`[Interaction] Erreur (${interaction.customId ?? interaction.commandName}) :`, error);
     if (!interaction.isRepliable()) return;
 
-    const payload = { content: '❌ Une erreur est survenue, réessaie plus tard.', flags: MessageFlags.Ephemeral };
+    const payload = ephemeralText('❌ Une erreur est survenue, réessaie plus tard.');
     const reply = interaction.replied || interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload);
     await reply.catch(() => null);
   }

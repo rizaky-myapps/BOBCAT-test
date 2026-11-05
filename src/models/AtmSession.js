@@ -32,6 +32,7 @@ const atmSessionSchema = new Schema(
     tenue: { type: String, required: true },
     radio: { type: String, required: true },
     vehicle: { type: String, required: true },
+    supervisorId: { type: String, default: null },
     /** Mention utilisée à la publication ("@everyone", "<@&roleId>") ou null si pas de ping. */
     pingMention: { type: String, default: null },
 

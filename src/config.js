@@ -14,6 +14,7 @@ const config = {
   atm: {
     channelId: process.env.ATM_CHANNEL_ID,
     pingRoleId: process.env.ATM_PING_ROLE_ID || null,
+    supervisorRoleId: process.env.ATM_SUPERVISOR_ROLE_ID || null,
     managerRoleIds: splitIds(process.env.ATM_MANAGER_ROLE_IDS),
     timezone: process.env.TIMEZONE || 'Europe/Paris',
   },

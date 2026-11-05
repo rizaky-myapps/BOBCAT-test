@@ -6,8 +6,6 @@ const {
   MediaGalleryItemBuilder,
   MessageFlags,
   SectionBuilder,
-  SeparatorBuilder,
-  SeparatorSpacingSize,
   TextDisplayBuilder,
 } = require('discord.js');
 const {
@@ -20,18 +18,19 @@ const {
   findLabel,
 } = require('./constants');
 const { toUnix } = require('../utils/date');
+const { separator } = require('../utils/v2');
 
 /** Nombre max d'agents listés dans « Agent(s) disponible(s) » (limite de 4000 caractères par message). */
 const MAX_AVAILABLE_SHOWN = 60;
-
-const separator = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small);
+/** Valeur affichée tant qu'une information n'est pas renseignée (aperçu). */
+const EMPTY = '...';
 
 function formatDispatchLines(dispatch) {
   const lines = dispatch.map((agent) => {
     const emojis = AGENT_ROLES.filter((role) => agent.roles.includes(role.value)).map((role) => role.emoji);
     return `> - <@${agent.userId}>${emojis.length ? ` ${emojis.join(' ')}` : ''}`;
   });
-  while (lines.length < DISPATCH_MIN_LINES) lines.push('> - ...');
+  while (lines.length < DISPATCH_MIN_LINES) lines.push(`> - ${EMPTY}`);
   return lines.join('\n');
 }
 
@@ -44,27 +43,35 @@ function formatAvailableLines(available) {
   return lines.join('\n');
 }
 
-function buildMainText(session) {
-  const ts = toUnix(session.scheduledAt);
-  const radio = RADIOS.find((item) => item.value === session.radio)?.short ?? session.radio;
+/**
+ * Texte principal de la session.
+ * @param {{ scheduledAt?: Date|null, radio?: string|null, tenue?: string|null, vehicle?: string|null,
+ *   supervisorId?: string|null, pingMention?: string|null, status: string, dispatch: object[] }} data
+ */
+function buildMainText(data) {
+  const ts = data.scheduledAt ? toUnix(data.scheduledAt) : null;
+  const code = (value) => `\`${value || EMPTY}\``;
+  const radio = data.radio ? (RADIOS.find((item) => item.value === data.radio)?.short ?? data.radio) : null;
+  const tenue = data.tenue ? findLabel(TENUES, data.tenue) : null;
   const legend = AGENT_ROLES.map((role) => `> ${role.emoji}﻿ ${role.label}`).join('\n');
 
   return [
     '# SESSION ATM',
-    `Recherche d'agent pour un ravitaillement d'ATM.${session.pingMention ? ` ${session.pingMention}` : ''}`,
+    `Recherche d'agent pour un ravitaillement d'ATM.${data.pingMention ? ` ${data.pingMention}` : ''}`,
     "Ceux présent sur le dispatch, rendez-vous à l'heure indiquée au QG.",
     '',
-    `> **Date :** <t:${ts}:d>`,
-    `> **Heure :** <t:${ts}:t> <t:${ts}:R>`,
+    `> **Date :** ${ts ? `<t:${ts}:d>` : EMPTY}`,
+    `> **Heure :** ${ts ? `<t:${ts}:t> <t:${ts}:R>` : EMPTY}`,
     '',
     '- **__Agents sur dispatch :__**',
-    formatDispatchLines(session.dispatch),
+    formatDispatchLines(data.dispatch),
     '',
     '- **__Informations :__**',
-    `> **Radio :** \`${radio}\``,
-    `> **Tenue :** \`${findLabel(TENUES, session.tenue)}\``,
-    `> **Véhicule :** \`${session.vehicle}\``,
-    `> **Statut :** \`${findLabel(STATUSES, session.status)}\``,
+    `> **Radio :** ${code(radio)}`,
+    `> **Tenue :** ${code(tenue)}`,
+    `> **Véhicule :** ${code(data.vehicle)}`,
+    `> **Superviseur :** ${data.supervisorId ? `<@${data.supervisorId}>` : EMPTY}`,
+    `> **Statut :** ${code(findLabel(STATUSES, data.status))}`,
     '',
     '- **__Légende :__**',
     legend,
@@ -72,32 +79,61 @@ function buildMainText(session) {
 }
 
 /**
- * Construit le message (Components V2) d'une session ATM.
+ * Container principal (texte + bouton ⚙️ en haut à droite), partagé par le message et l'aperçu.
+ * @param {Parameters<typeof buildMainText>[0] & { photos?: { url: string }[] }} data
+ * @param {string} manageCustomId custom_id du bouton ⚙️
+ */
+function buildMainContainer(data, manageCustomId) {
+  const container = new ContainerBuilder().addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildMainText(data)))
+      .setButtonAccessory(
+        new ButtonBuilder().setCustomId(manageCustomId).setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+      ),
+  );
+
+  if (data.photos?.length) {
+    container
+      .addSeparatorComponents(separator())
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          data.photos.map((photo) => new MediaGalleryItemBuilder().setURL(photo.url)),
+        ),
+      );
+  }
+  return container;
+}
+
+/**
+ * Mentions autorisées : les personnes affichées dans le message (superviseur, dispatch,
+ * disponibles) et le rôle / @everyone du ping s'il est activé.
+ */
+function buildAllowedMentions(session) {
+  const users = [
+    ...new Set(
+      [
+        session.supervisorId,
+        ...session.dispatch.map((agent) => agent.userId),
+        ...session.available.slice(0, MAX_AVAILABLE_SHOWN),
+      ].filter(Boolean),
+    ),
+  ].slice(0, 100);
+  const roleId = /^<@&(\d+)>$/.exec(session.pingMention ?? '')?.[1];
+
+  return {
+    users,
+    roles: roleId ? [roleId] : [],
+    parse: session.pingMention === '@everyone' ? ['everyone'] : [],
+  };
+}
+
+/**
+ * Construit le message (Components V2) d'une session ATM publiée.
  * @param {import('../models/AtmSession')} session
- * @returns {{ flags: number, components: import('discord.js').JSONEncodable<unknown>[] }}
  */
 function renderSessionMessage(session) {
   const id = session._id.toString();
   const closed = CLOSED_STATUSES.includes(session.status);
-
-  // --- Bloc principal + bouton ⚙️ (gestion) ---
-  const mainContainer = new ContainerBuilder().addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(buildMainText(session)))
-      .setButtonAccessory(
-        new ButtonBuilder().setCustomId(`atm:manage:${id}`).setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
-      ),
-  );
-
-  if (session.photos.length) {
-    mainContainer
-      .addSeparatorComponents(separator())
-      .addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          session.photos.map((photo) => new MediaGalleryItemBuilder().setURL(photo.url)),
-        ),
-      );
-  }
 
   // --- Bloc « Agent(s) disponible(s) » + bouton « Je suis disponible » ---
   const availableContainer = new ContainerBuilder().addSectionComponents(
@@ -118,8 +154,9 @@ function renderSessionMessage(session) {
 
   return {
     flags: MessageFlags.IsComponentsV2,
-    components: [separator(), mainContainer, availableContainer, separator()],
+    components: [separator(), buildMainContainer(session, `atm:manage:${id}`), availableContainer, separator()],
+    allowedMentions: buildAllowedMentions(session),
   };
 }
 
-module.exports = { renderSessionMessage };
+module.exports = { buildMainContainer, renderSessionMessage };

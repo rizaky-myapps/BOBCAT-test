@@ -2,12 +2,13 @@
 
 Bot Discord (**discord.js v14**) qui organise les sessions de ravitaillement d'ATM :
 
-- la commande `/atm` ouvre un formulaire (modal) ;
-- le bot publie une annonce au format **Components V2** dans un salon dédié ;
-- les agents s'inscrivent avec le bouton **« Je suis disponible »** ;
-- le créateur (ou un responsable) gère la session avec le bouton **⚙️** : dispatch, rôles, statut, modification, photos.
+- la commande `/superviseur` définit les superviseurs proposés dans `/atm` ;
+- la commande `/atm` affiche un aperçu du message, à compléter avec ses boutons ;
+- le bot publie l'annonce au format **Components V2** dans un salon dédié ;
+- les agents s'inscrivent avec le bouton **« Je suis disponible »**.
 
-Les sessions sont stockées dans **MongoDB** (via **mongoose**) et les photos sont sauvegardées sur **Cloudinary**.
+Tous les messages du bot sont au format Components V2 (séparateur, container, séparateur).
+Les sessions et les superviseurs sont stockés dans **MongoDB** (via **mongoose**). **Cloudinary** sert aux photos des sessions.
 
 ---
 
@@ -35,7 +36,8 @@ Remplis ensuite le fichier `.env` :
 | `DISCORD_TOKEN` | ✅ | Token du bot |
 | `DISCORD_GUILD_ID` | | Serveur où `/atm` est enregistrée au démarrage (instantané). Vide = commande globale (jusqu'à 1h de propagation) |
 | `ATM_CHANNEL_ID` | ✅ | Salon où les sessions ATM sont publiées |
-| `ATM_PING_ROLE_ID` | | Rôle mentionné si « Ping employés ? » = OUI. Vide = `@everyone` |
+| `ATM_PING_ROLE_ID` | | Rôle mentionné quand le bouton « Ping agents » est sur OUI. Vide = `@everyone` |
+| `ATM_SUPERVISOR_ROLE_ID` | ✅ (`/superviseur`) | Rôle dont les membres sont proposés dans `/superviseur` |
 | `ATM_MANAGER_ROLE_IDS` | | Rôles (séparés par des virgules) autorisés à gérer **toutes** les sessions via ⚙️ |
 | `TIMEZONE` | | Fuseau horaire de la date saisie (défaut : `Europe/Paris`) |
 | `MONGODB_URI` | ✅ | URI de connexion MongoDB |
@@ -48,22 +50,39 @@ Lance le bot :
 npm start
 ```
 
-Au démarrage, le bot enregistre (ou met à jour) automatiquement la commande `/atm` auprès de Discord. Aucune étape de déploiement séparée n'est nécessaire.
+Au démarrage, le bot enregistre (ou met à jour) automatiquement les commandes `/atm` et `/superviseur` auprès de Discord. Aucune étape de déploiement séparée n'est nécessaire.
 
 ### Permissions du bot
 
 Dans le salon `ATM_CHANNEL_ID`, le bot a besoin de : **Voir le salon**, **Envoyer des messages** et, pour le ping, **Mentionner @everyone, @here et tous les rôles** (ou un `ATM_PING_ROLE_ID` mentionnable).
-Seul l'intent `Guilds` est utilisé : aucun intent privilégié n'est nécessaire.
 
-Pour limiter qui peut utiliser `/atm` : *Paramètres du serveur → Intégrations → ton bot → /atm*.
+**Intent privilégié obligatoire** : active **Server Members Intent** dans le portail développeur
+(*ton application → Bot → Privileged Gateway Intents*). Il sert à lister les membres ayant le rôle superviseur.
+Sans lui, le bot refuse de démarrer (`Used disallowed intents`).
+
+Pour limiter qui peut utiliser `/atm` ou `/superviseur` : *Paramètres du serveur → Intégrations → ton bot*.
 
 ---
 
 ## Utilisation
 
-### 1. `/atm` : création d'une session
+### 1. `/superviseur` : liste des superviseurs
 
-Le modal contient :
+Ouvre un modal avec un menu listant les membres qui ont le rôle `ATM_SUPERVISOR_ROLE_ID` (25 maximum).
+Les superviseurs déjà enregistrés sont pré-sélectionnés : la sélection validée devient la liste des superviseurs en base.
+
+### 2. `/atm` : aperçu et création d'une session
+
+`/atm` affiche (pour toi seul) un aperçu du message qui sera envoyé. La liste des agents y est remplacée par des boutons :
+
+| Bouton | Action |
+| --- | --- |
+| 📝 Informations | Ouvre le modal à 5 questions (pré-rempli si tu l'as déjà rempli) |
+| 🚙 Choisir la plaque | Affiché seulement si « Autre » est choisi comme véhicule : ouvre un modal pour saisir la plaque |
+| 🔔 Ping agents : OUI / 🔕 NON | Active ou désactive le ping des agents (OUI par défaut) |
+| 📨 Envoyer | Publie la session dans `ATM_CHANNEL_ID`. Actif une fois toutes les informations renseignées |
+
+Le modal « Informations » contient :
 
 | Champ | Type | Choix |
 | --- | --- | --- |
@@ -71,41 +90,26 @@ Le modal contient :
 | Choix de la tenue | Menu de sélection | CDF/ATM Long, CDF/ATM Court |
 | Fréquence radio | Menu de sélection | Sierra 6, Sierra 7, Sierra 8 |
 | Choix du véhicule | Menu de sélection | ZJR 325, ABC 123, Autre |
-| Ping employés ? | Menu de sélection | OUI, NON |
+| Choix du superviseur | Menu de sélection | Superviseurs enregistrés via `/superviseur` |
 
-**Option « Autre »** : Discord n'autorise pas un bot à ouvrir un modal en réponse à un autre modal.
-Après l'envoi du premier modal, le bot affiche donc un message (visible par toi seul) avec un bouton
-**« 🚙 Renseigner le véhicule »** qui ouvre le second modal (zone de texte « Véhicule utilisé »).
-Si la date est invalide, le même mécanisme permet de la corriger sans tout ressaisir.
+L'aperçu est mis à jour à chaque modification. Le brouillon est conservé en base pendant 24h.
 
-Les réponses du premier modal sont transportées dans l'identifiant du bouton : rien n'est perdu, même si le bot redémarre entre les deux étapes.
-
-### 2. L'annonce
+### 3. L'annonce
 
 Le message est publié dans `ATM_CHANNEL_ID` au format Components V2, d'après le modèle fourni :
 
 - la date et l'heure en timestamps Discord (`<t:…:d>`, `<t:…:t>`, `<t:…:R>`), affichés dans le fuseau horaire de chaque membre ;
-- le ping `@everyone` (ou le rôle configuré) seulement si « Ping employés ? » = OUI ;
-- les informations (radio `S6`/`S7`/`S8`, tenue, véhicule, statut) ;
-- la liste des agents sur dispatch avec leurs rôles (🛡️ 🧳 🔫 🚙 🆕) ;
-- la liste des agents disponibles.
+- le ping `@everyone` (ou le rôle `ATM_PING_ROLE_ID`) seulement si « Ping agents » est sur OUI ;
+- les informations (radio `S6`/`S7`/`S8`, tenue, véhicule, superviseur, statut) ;
+- la liste des agents sur dispatch et la liste des agents disponibles.
 
-**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire (et te retire aussi du dispatch).
-Le bouton est désactivé quand la session est *Terminée* ou *Annulée*.
+Les mentions du message (superviseur, agents, rôle) mentionnent réellement les personnes. Discord n'envoie une notification qu'à la publication du message : une personne ajoutée ensuite (par exemple via « Je suis disponible ») apparaît en surbrillance mais ne reçoit pas de notification.
 
-### 3. Le bouton ⚙️ (gestion)
+**« Je suis disponible »** : un clic t'ajoute à la liste, un second clic t'en retire.
 
-Réservé au créateur de la session, aux membres ayant la permission **Gérer le serveur** et aux rôles `ATM_MANAGER_ROLE_IDS`.
-Il ouvre un panneau privé qui permet de :
+### 4. Le bouton ⚙️
 
-- **choisir les agents sur dispatch** (5 maximum) ;
-- **🏷️ attribuer les rôles** de la légende à chaque agent du dispatch ;
-- **changer le statut** : En attente..., En cours, Terminée, Annulée ;
-- **✏️ modifier les infos** : date, tenue, radio, véhicule ;
-- **📸 ajouter des photos** (10 maximum) : elles sont envoyées sur Cloudinary puis affichées dans l'annonce. Les liens des pièces jointes Discord expirent, alors que Cloudinary les conserve ;
-- **🧹 retirer les photos** (elles sont aussi supprimées de Cloudinary).
-
-Chaque modification met immédiatement l'annonce à jour, sans renvoyer de ping.
+Le bouton en haut à droite répond « 🚧 En développement ».
 
 ---
 
@@ -118,23 +122,30 @@ src/
 ├── commands/
 │   ├── index.js             # Liste des commandes
 │   ├── deploy.js            # Enregistrement des commandes slash (appelé au démarrage)
-│   └── atm.js               # /atm → ouvre le modal
+│   ├── atm.js               # /atm → aperçu du message
+│   └── superviseur.js       # /superviseur → modal des membres ayant le rôle superviseur
 ├── interactions/
 │   ├── index.js             # Routage des commandes, boutons, menus et modals
-│   ├── atmCreate.js         # Modal /atm, bouton et modal « véhicule Autre / date »
+│   ├── atmPreview.js        # Boutons et modals de l'aperçu /atm (informations, plaque, ping, envoi)
+│   ├── supervisor.js        # Enregistrement des superviseurs (modal /superviseur)
 │   ├── atmSession.js        # Boutons « Je suis disponible » et ⚙️
-│   └── atmPanel.js          # Actions du panneau de gestion
+│   └── atmPanel.js          # Ancien panneau de gestion (plus accessible depuis ⚙️)
 ├── atm/
 │   ├── constants.js         # Choix des menus, statuts, rôles de la légende, limites
-│   ├── draft.js             # Encodage des réponses entre les deux modals
 │   ├── modals.js            # Construction des modals
 │   ├── message.js           # Rendu de l'annonce (Components V2)
-│   ├── panel.js             # Rendu du panneau ⚙️
+│   ├── preview.js           # Rendu de l'aperçu /atm
+│   ├── panel.js             # Rendu de l'ancien panneau de gestion
 │   └── service.js           # Publication, mise à jour du message, permissions
-├── models/AtmSession.js     # Schéma mongoose d'une session
+├── models/
+│   ├── AtmSession.js        # Session publiée
+│   ├── AtmDraft.js          # Brouillon de l'aperçu /atm (expire après 24h)
+│   └── Supervisor.js        # Superviseurs enregistrés via /superviseur
 ├── services/cloudinary.js   # Envoi / suppression d'images sur Cloudinary
 ├── database/mongoose.js     # Connexion MongoDB
-└── utils/date.js            # Conversion « JJ/MM/AAAA HH:MM » ⇄ timestamp
+└── utils/
+    ├── date.js              # Conversion « JJ/MM/AAAA HH:MM » ⇄ timestamp
+    └── v2.js                # Messages texte au format Components V2
 ```
 
 Pour modifier les choix (tenues, fréquences, véhicules, rôles, statuts) ou les limites, édite `src/atm/constants.js`.

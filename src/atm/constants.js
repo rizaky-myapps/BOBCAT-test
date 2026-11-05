@@ -21,11 +21,6 @@ const VEHICLES = [
   { value: VEHICLE_OTHER, label: 'Autre' },
 ];
 
-const PING_CHOICES = [
-  { value: 'oui', label: 'OUI' },
-  { value: 'non', label: 'NON' },
-];
-
 /** Statuts d'une session (affichés dans « Informations »). */
 const STATUSES = [
   { value: 'pending', label: 'En attente...', emoji: '⏳' },
@@ -63,7 +58,6 @@ module.exports = {
   RADIOS,
   VEHICLES,
   VEHICLE_OTHER,
-  PING_CHOICES,
   STATUSES,
   CLOSED_STATUSES,
   AGENT_ROLES,
