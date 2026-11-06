@@ -1,3 +1,5 @@
+const { config } = require('../config');
+
 /**
  * Valeurs proposées dans les menus de sélection du modal /atm.
  * `value` est stocké en base, `label` est affiché dans Discord.
@@ -54,8 +56,8 @@ const CANCEL_NO_AGENTS = { value: 'manque_agents', label: "Manque d'agents" };
 /** Places dans le véhicule (CO-ATM et superviseur compris) ; un agent de plus peut suivre en moto. */
 const VEHICLE_CAPACITY = 4;
 
-/** Nombre minimum de personnes sur le dispatch pour commencer (CO-ATM compris). */
-const MIN_DISPATCH = 3;
+/** Nombre minimum de personnes sur le dispatch pour commencer (CO-ATM compris) : ATM_MIN_AGENTS du .env. */
+const MIN_DISPATCH = config.atmMinAgents;
 
 /**
  * Taille du carré des photos de PDS par rapport à la hauteur de la capture : assez petit pour exclure

@@ -103,7 +103,7 @@ async function findTodaySessionsForUser(guildId, userId, now = new Date()) {
 }
 
 /** Agents à dispatcher au minimum pour pouvoir commencer (en plus du CO-ATM et du superviseur). */
-const getMinAgents = (session) => MIN_DISPATCH - (session.supervisorId ? 2 : 1);
+const getMinAgents = (session) => Math.max(0, MIN_DISPATCH - (session.supervisorId ? 2 : 1));
 
 /** Le membre est-il sur cette session ? (CO-ATM, dispatch ou vote « Je suis disponible ») */
 const isInvolved = (session, userId) =>

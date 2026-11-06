@@ -2,6 +2,12 @@ require('dotenv').config({ quiet: true });
 
 const env = (key) => process.env[key] || null;
 
+/** Entier strictement positif, sinon la valeur par défaut. */
+function positiveInt(value, fallback) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : fallback;
+}
+
 const config = {
   discord: {
     token: env('BOBCAT_DISCORD_BOT_TOKEN'),
@@ -39,6 +45,8 @@ const config = {
     folder: env('CLOUDINARY_FOLDER') || 'bobcat-test/atm',
   },
   timezone: env('TIMEZONE') || 'Europe/Paris',
+  /** Nombre minimum de personnes sur le dispatch (CO-ATM compris) pour commencer une session ATM. */
+  atmMinAgents: positiveInt(env('ATM_MIN_AGENTS'), 3),
 };
 
 /** Nom de la variable du .env correspondant à chaque clé obligatoire (pour les messages d'erreur). */

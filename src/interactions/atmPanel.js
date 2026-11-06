@@ -17,6 +17,7 @@ const {
   findSession,
   getAgentSlots,
   getDispatchedAgents,
+  getMinAgents,
   isBiker,
   resolveVehicle,
   syncSessionMessage,
@@ -252,7 +253,7 @@ async function handleStartButton(interaction, [id]) {
     return interaction.update(
       renderSessionPanel(
         session,
-        `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM + 2 agents, ou CO-ATM + superviseur + 1 agent). Fais le dispatching.`,
+        `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`,
       ),
     );
   }
