@@ -8,7 +8,7 @@ const {
 } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
 const { START_CHECK_DELAY, START_DEADLINE } = require('./constants');
-const { sessionUrl } = require('./service');
+const { sessionLinkButton } = require('./service');
 const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
@@ -26,11 +26,10 @@ function renderStartCheck(session, finalLine) {
   const lines = [
     '## ⏰ Session ATM non commencée',
     `<@${session.creatorId}>, la session prévue le <t:${ts}:d> à <t:${ts}:t> n'a toujours pas commencé.`,
-    `> [Voir la session](${sessionUrl(session)})`,
     '',
   ];
 
-  let buttons = null;
+  const buttons = new ActionRowBuilder();
   if (finalLine) {
     lines.push(finalLine);
   } else if (check?.status === 'maintained') {
@@ -40,7 +39,7 @@ function renderStartCheck(session, finalLine) {
     );
   } else {
     lines.push('Est-elle maintenue ?');
-    buttons = new ActionRowBuilder().addComponents(
+    buttons.addComponents(
       new ButtonBuilder().setCustomId(`atm:keep:${session._id}`).setStyle(ButtonStyle.Success).setLabel('Maintenu'),
       new ButtonBuilder()
         .setCustomId(`atm:pcancel:${session._id}:check`)
@@ -49,10 +48,10 @@ function renderStartCheck(session, finalLine) {
     );
   }
 
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(lines.join('\n')),
-  );
-  if (buttons) container.addActionRowComponents(buttons);
+  buttons.addComponents(sessionLinkButton(session));
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n')))
+    .addActionRowComponents(buttons);
 
   return {
     flags: MessageFlags.IsComponentsV2,

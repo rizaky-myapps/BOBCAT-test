@@ -1,4 +1,5 @@
 const {
+  ActionRowBuilder,
   ContainerBuilder,
   MessageFlags,
   SeparatorBuilder,
@@ -10,17 +11,16 @@ const {
 const separator = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small);
 
 /**
- * Message texte au format Components V2 : séparateur, container avec le texte, séparateur.
+ * Message texte au format Components V2 : séparateur, container avec le texte (et des boutons), séparateur.
  * @param {string} content
+ * @param {{ buttons?: import('discord.js').ButtonBuilder[] }} [options] Boutons affichés sous le texte.
  */
-function textMessage(content) {
+function textMessage(content, { buttons = [] } = {}) {
+  const container = new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+  if (buttons.length) container.addActionRowComponents(new ActionRowBuilder().addComponents(buttons));
   return {
     flags: MessageFlags.IsComponentsV2,
-    components: [
-      separator(),
-      new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(content)),
-      separator(),
-    ],
+    components: [separator(), container, separator()],
     allowedMentions: { parse: [] },
   };
 }

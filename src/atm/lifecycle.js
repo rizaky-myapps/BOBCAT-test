@@ -1,11 +1,10 @@
-const { ContainerBuilder, MessageFlags, TextDisplayBuilder } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
 const { CANCEL_NOT_STARTED, START_DEADLINE } = require('./constants');
 const { refreshSessionPds } = require('./pds');
-const { moveToBasket, sessionUrl, syncSessionMessage } = require('./service');
+const { fetchRechercheChannel, moveToBasket, sessionLinkButton, syncSessionMessage } = require('./service');
 const { closeStartCheck } = require('./startCheck');
 const { toUnix } = require('../utils/date');
-const { separator } = require('../utils/v2');
+const { textMessage } = require('../utils/v2');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -68,27 +67,24 @@ async function moveClosedSessionsToBasket() {
   }
 }
 
-/** Prévient par un ping, dans le salon des sessions, les agents ayant voté pour une session annulée. */
+/**
+ * Prévient par un ping, dans le salon RECHERCHE ATM (à défaut celui de la session), les agents ayant voté
+ * pour une session annulée.
+ */
 async function notifyVoters(client, session) {
   if (!session.available.length) return;
   const ts = toUnix(session.scheduledAt);
   const text = [
     '## ❌ Session ATM annulée',
     `La session prévue le <t:${ts}:d> à <t:${ts}:t> n'a pas commencé à temps : elle est annulée.`,
-    `> [Voir la session](${sessionUrl(session)})`,
     '',
     session.available.map((userId) => `<@${userId}>`).join(' '),
   ].join('\n');
 
   try {
-    const channel = await client.channels.fetch(session.channelId);
+    const channel = await fetchRechercheChannel(client, session);
     await channel.send({
-      flags: MessageFlags.IsComponentsV2,
-      components: [
-        separator(),
-        new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(text)),
-        separator(),
-      ],
+      ...textMessage(text, { buttons: [sessionLinkButton(session)] }),
       allowedMentions: { users: session.available.slice(0, 100) },
     });
   } catch (error) {

@@ -1,3 +1,4 @@
+const { ButtonBuilder, ButtonStyle } = require('discord.js');
 const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
 const AtmSessionBasket = require('../models/AtmSessionBasket');
@@ -203,6 +204,14 @@ function getAvailableChoices(used) {
 /** Le véhicule (libellé ou plaque) est-il déjà utilisé ? */
 const isVehicleUsed = (used, vehicle) => Boolean(vehicle) && used.vehicles.has(normalizeVehicle(vehicle));
 
+/** Bouton-lien « Voir la session » vers le message d'une session. */
+const sessionLinkButton = (session) =>
+  new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Voir la session').setURL(sessionUrl(session));
+
+/** Salon RECHERCHE ATM (rappels et annulations pour les agents), à défaut celui de la session. */
+const fetchRechercheChannel = (client, session) =>
+  client.channels.fetch(config.channels.rechercheAtm ?? session.channelId);
+
 /** Lien vers le message d'une session. */
 const sessionUrl = (session) =>
   `https://discord.com/channels/${session.guildId}/${session.channelId}/${session.messageId}`;
@@ -325,6 +334,8 @@ module.exports = {
   canManageSession,
   findTodaySessionsForUser,
   sessionUrl,
+  sessionLinkButton,
+  fetchRechercheChannel,
   publishSession,
   postSessionMessage,
   programSession,
