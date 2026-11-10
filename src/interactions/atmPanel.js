@@ -44,6 +44,7 @@ const {
 } = require('../atm/service');
 const { renderStartCheck } = require('../atm/startCheck');
 const { isCloudinaryEnabled } = require('../services/cloudinary');
+const { toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 
 const AFTER = { returnDocument: 'after' };
@@ -453,8 +454,12 @@ async function handleStartButton(interaction, [id]) {
   return interaction.update(renderConfirm(session, 'start'));
 }
 
-/** Il faut un nombre minimum de personnes sur le dispatch pour commencer. */
+/** Une session ne commence pas avant son heure prévue, et avec un nombre minimum de personnes sur le dispatch. */
 function startError(session) {
+  if (Date.now() < session.scheduledAt.getTime()) {
+    const ts = toUnix(session.scheduledAt);
+    return `❌ La session ne peut pas commencer avant l'heure prévue : <t:${ts}:t> (<t:${ts}:R>).`;
+  }
   if (session.dispatch.length >= MIN_DISPATCH) return null;
   return `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`;
 }
