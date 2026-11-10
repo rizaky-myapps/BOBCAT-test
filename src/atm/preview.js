@@ -53,14 +53,18 @@ function renderPreview(draft, guild) {
   const button = (action, style, emoji, label) =>
     new ButtonBuilder().setCustomId(`atm:${action}:${id}`).setStyle(style).setEmoji(emoji).setLabel(label);
 
+  // La date et l'heure se choisissent en premier (elles déterminent les radios et véhicules disponibles).
   // Tant que le superviseur n'a pas répondu, les informations ne sont pas modifiables.
+  const noDate = !draft.scheduledAt;
   const rows = [
-    row(button('info', ButtonStyle.Secondary, 'ℹ️', 'Informations générales').setDisabled(locked)),
     row(button('date', ButtonStyle.Secondary, '🕑', "Choisir la date et l'heure").setDisabled(locked)),
+    row(button('info', ButtonStyle.Secondary, 'ℹ️', 'Informations générales').setDisabled(locked || noDate)),
   ];
   // Uniquement pour les membres sans le rôle CO ATM ; plus modifiable une fois la présence validée.
   if (withSupervisor) {
-    rows.push(row(button('sup', ButtonStyle.Secondary, '🛡️', 'Sélectionner un superviseur').setDisabled(locked || accepted)));
+    rows.push(
+      row(button('sup', ButtonStyle.Secondary, '🛡️', 'Sélectionner un superviseur').setDisabled(locked || accepted || noDate)),
+    );
   }
   rows.push(
     row(

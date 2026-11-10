@@ -1,5 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
+const PdsAtm = require('../models/PdsAtm');
 const {
   CANCEL_OTHER,
   CANCEL_REASONS,
@@ -29,8 +30,11 @@ const {
   findSession,
   getAgentSlots,
   getDispatchedAgents,
+  getAvailableChoices,
   getMinAgents,
+  getUsedResources,
   isBiker,
+  isVehicleUsed,
   resolveVehicle,
   syncSessionMessage,
 } = require('../atm/service');
@@ -381,7 +385,12 @@ async function handleDriverModal(interaction, [id]) {
 async function handleInfoButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
-  return interaction.showModal(buildSessionInfoModal(session));
+  // Les radios et véhicules utilisés par une autre session à la même heure ne sont pas proposés.
+  const choices = getAvailableChoices(await getUsedResources(session.guildId, session.scheduledAt, session._id));
+  if (!choices.radios.length) {
+    return interaction.reply(ephemeralText('❌ Toutes les radios sont déjà utilisées par une autre session à ce moment-là.'));
+  }
+  return interaction.showModal(buildSessionInfoModal(session, choices));
 }
 
 async function handleInfoModal(interaction, [id]) {
@@ -394,9 +403,15 @@ async function handleInfoModal(interaction, [id]) {
   const [vehicleChoice] = fields.getStringSelectValues(FIELDS.vehicle);
   const vehicle = resolveVehicle(vehicleChoice, fields.getTextInputValue(FIELDS.vehicleOther));
 
+  const used = await getUsedResources(session.guildId, session.scheduledAt, session._id);
+  const choices = getAvailableChoices(used);
+
   let error = null;
   if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = '❌ Réponses invalides.';
   else if (!vehicle) error = '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule.';
+  else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice) || isVehicleUsed(used, vehicle)) {
+    error = '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.';
+  }
   if (error) return interaction.update(await renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
 
   const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { radio, tenue, vehicle } }, AFTER);
@@ -481,9 +496,11 @@ async function handlePdsModal(interaction, [id]) {
   // L'envoi de la photo sur Cloudinary peut dépasser les 3 secondes accordées par Discord.
   await interaction.deferUpdate();
   try {
-    const { pds, message } = await createPds(interaction, session, { mallettes, attachment });
+    const { message } = await createPds(interaction, session, { mallettes, attachment });
+    // Numéro de l'ATM sur la session (le numéro du jour reste affiché sur la PDS elle-même).
+    const onSession = await PdsAtm.countDocuments({ sessionId: session._id });
     return interaction.editReply(
-      await renderSessionPanel(session, `📦 PDS n°${String(pds.number).padStart(2, '0')} envoyée : ${message.url}`),
+      await renderSessionPanel(session, `PDS n°${String(onSession).padStart(2, '0')} posté : ${message.url}`),
     );
   } catch (error) {
     console.error('[PDS] Création impossible :', error);

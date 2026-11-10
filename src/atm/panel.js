@@ -20,8 +20,8 @@ const row = (...buttons) => new ActionRowBuilder().addComponents(buttons);
 
 /**
  * Panneau de gestion (éphémère) ouvert par le bouton ⚙️ d'une session postée.
- * - En attente : ❌ (annuler), Modifier les informations, Gestion du Dispatch, Commencer la session
- * - En cours : ❌ (terminer), Nouvelle PDS
+ * - En attente : 🛑 (annuler), Modifier les informations, Gestion du Dispatch, Commencer la session
+ * - En cours : 🛑 (terminer), Nouvelle PDS
  * @param {import('../models/AtmSession')} session
  * @param {string} [notice] Message affiché sous le résumé (retour d'une action).
  */
@@ -44,11 +44,11 @@ async function renderSessionPanel(session, notice) {
   if (inProgress) lines.push(`> **Nombre d'ATM remplis sur la session :** \`${onSession}\``);
   if (notice) lines.push('', notice);
 
-  // ❌ : annule la session avant son début, la termine pendant (avec double vérification).
+  // 🛑 : annule la session avant son début, la termine pendant (avec double vérification).
   const close = new ButtonBuilder()
     .setCustomId(inProgress ? `atm:pfinish:${id}` : `atm:pcancel:${id}:panel`)
     .setStyle(ButtonStyle.Danger)
-    .setEmoji('❌');
+    .setEmoji('🛑');
 
   const container = new ContainerBuilder().addSectionComponents(
     new SectionBuilder()

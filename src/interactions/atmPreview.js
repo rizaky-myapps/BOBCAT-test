@@ -16,7 +16,10 @@ const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/pre
 const {
   checkSessionDate,
   findConflictingSessions,
+  getAvailableChoices,
   getConfirmedSupervisorId,
+  getUsedResources,
+  isVehicleUsed,
   isCoAtm,
   publishSession,
   resolveVehicle,
@@ -27,6 +30,27 @@ const { formatDateTime, getUpcomingDays, parseDateTime } = require('../utils/dat
 const { ephemeralText, textMessage } = require('../utils/v2');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
+
+const NO_DATE_MESSAGE = "📅 Choisis d'abord la date et l'heure de la session.";
+const NO_RADIO_MESSAGE = '❌ Toutes les radios sont déjà utilisées par une autre session à ce moment-là : choisis une autre heure.';
+
+/**
+ * Radio / véhicule du brouillon déjà pris par une autre session à cette heure-là : ils sont retirés du
+ * brouillon et un message l'explique.
+ */
+async function releaseUsedResources(draft, notices) {
+  if (!draft.scheduledAt) return;
+  const used = await getUsedResources(draft.guildId, draft.scheduledAt);
+  if (draft.radio && used.radios.has(draft.radio)) {
+    notices.push('❌ La radio choisie est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.');
+    draft.radio = null;
+  }
+  if (draft.vehicle && isVehicleUsed(used, resolveVehicle(draft.vehicle, draft.plate))) {
+    notices.push('❌ Le véhicule choisi est déjà utilisé par une autre session à ce moment-là : choisis-en un autre.');
+    draft.vehicle = null;
+    draft.plate = '';
+  }
+}
 
 const LOCKED_MESSAGE =
   '⏳ En attente de la réponse du superviseur : les informations ne sont pas modifiables pour le moment.';
@@ -104,7 +128,12 @@ async function handleInfoButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
   if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
-  return interaction.showModal(buildInfoModal(draft));
+  if (!draft.scheduledAt) return interaction.reply(ephemeralText(NO_DATE_MESSAGE));
+
+  // Les radios et véhicules utilisés par une autre session à la même heure ne sont pas proposés.
+  const choices = getAvailableChoices(await getUsedResources(draft.guildId, draft.scheduledAt));
+  if (!choices.radios.length) return interaction.reply(ephemeralText(NO_RADIO_MESSAGE));
+  return interaction.showModal(buildInfoModal(draft, choices));
 }
 
 async function handleInfoModal(interaction, [id]) {
@@ -118,12 +147,22 @@ async function handleInfoModal(interaction, [id]) {
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
   const plate = fields.getTextInputValue(FIELDS.vehicleOther).trim();
 
+  if (!draft.scheduledAt) return interaction.reply(ephemeralText(NO_DATE_MESSAGE));
+  const used = await getUsedResources(draft.guildId, draft.scheduledAt);
+  const choices = getAvailableChoices(used);
   if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle)) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
   if (!resolveVehicle(vehicle, plate)) {
     return interaction.reply(
       ephemeralText('❌ Tu as choisi « Autre » : renseigne la plaque du véhicule. Aucune modification enregistrée.'),
+    );
+  }
+  if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle) || isVehicleUsed(used, resolveVehicle(vehicle, plate))) {
+    return interaction.reply(
+      ephemeralText(
+        '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là. Aucune modification enregistrée.',
+      ),
     );
   }
 
@@ -188,6 +227,7 @@ async function handleDateModal(interaction, [id]) {
   }
 
   draft.set({ rawDate, scheduledAt });
+  await releaseUsedResources(draft, notices);
   await sendRequestIfReady(interaction, draft, notices);
   return saveAndRefresh(interaction, draft, notices);
 }
@@ -199,6 +239,7 @@ async function handleDateModal(interaction, [id]) {
 /** Message d'erreur si le superviseur ne peut pas (ou plus) être choisi, sinon null. */
 function supervisorChoiceError(interaction, draft) {
   if (isCoAtm(interaction.member)) return "ℹ️ Tu as le rôle CO ATM : tu n'as pas besoin de superviseur.";
+  if (!draft.scheduledAt) return NO_DATE_MESSAGE;
   if (isRequestPending(draft)) return LOCKED_MESSAGE;
   if (getConfirmedSupervisorId(draft)) return '🔒 Ton superviseur a validé sa présence : il ne peut plus être changé.';
   return null;
@@ -272,6 +313,15 @@ async function handleSendButton(interaction, [id]) {
   if (dateError) {
     return interaction.reply(ephemeralText(`${dateError}\nModifie la date via « Choisir la date et l'heure » avant de poster la session.`));
   }
+  // Une autre session a pu prendre la radio ou le véhicule entre-temps.
+  const resourceNotices = [];
+  await releaseUsedResources(draft, resourceNotices);
+  if (resourceNotices.length) {
+    await draft.save();
+    await updatePreview(interaction, draft);
+    return interaction.followUp(ephemeralText(`${resourceNotices.join('\n')}\nModifie-les via « Informations générales ».`));
+  }
+
   // Le superviseur a pu être placé sur une autre session au même moment depuis sa validation.
   const confirmedSupervisorId = getConfirmedSupervisorId(draft);
   if (confirmedSupervisorId) {

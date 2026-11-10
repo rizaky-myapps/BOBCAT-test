@@ -6,7 +6,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { CANCEL_REASONS, MAX_MALLETTES, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('./constants');
+const { CANCEL_REASONS, MAX_MALLETTES, TENUES, VEHICLES, VEHICLE_OTHER } = require('./constants');
 const { FIELDS, selectLabel, truncate, vehicleOtherInput } = require('./modals');
 
 const MALLETTE_CHOICES = Array.from({ length: MAX_MALLETTES }, (_, i) => ({
@@ -133,15 +133,18 @@ function buildReplacePickModal(session, options, max) {
     );
 }
 
-/** Modal « Informations » du panneau ⚙️ : radio, véhicule et tenue. */
-function buildSessionInfoModal(session) {
+/**
+ * Modal « Modifier les informations » du panneau ⚙️ : radio, véhicule et tenue.
+ * @param {{ radios: object[], vehicles: object[] }} choices Radios et véhicules encore disponibles à cette heure-là.
+ */
+function buildSessionInfoModal(session, choices) {
   const preset = VEHICLES.find((vehicle) => vehicle.value !== VEHICLE_OTHER && vehicle.label === session.vehicle);
   return new ModalBuilder()
     .setCustomId(`atm:pinfosub:${session._id}`)
     .setTitle('Informations de la session')
     .addLabelComponents(
-      selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', session.radio),
-      selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule', preset?.value ?? VEHICLE_OTHER),
+      selectLabel('Fréquence radio', FIELDS.radio, choices.radios, 'Sélectionne la fréquence radio', session.radio),
+      selectLabel('Choix du véhicule', FIELDS.vehicle, choices.vehicles, 'Sélectionne le véhicule', preset?.value ?? VEHICLE_OTHER),
       new LabelBuilder()
         .setLabel('Plaque du véhicule (si « Autre »)')
         .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')

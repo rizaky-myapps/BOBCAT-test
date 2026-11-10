@@ -5,6 +5,7 @@ const { renderSessionMessage } = require('./message');
 const {
   MIN_DISPATCH,
   MIN_POST_DELAY,
+  RADIOS,
   SESSION_DURATION,
   VEHICLES,
   VEHICLE_CAPACITY,
@@ -149,6 +150,45 @@ Une session dure environ 1h30 : choisis une heure qui ne la chevauche pas.`;
   return null;
 }
 
+/** Plaque / nom de véhicule normalisé pour comparer (majuscules, espaces simples). */
+const normalizeVehicle = (vehicle) => String(vehicle ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+/**
+ * Radios et véhicules déjà utilisés par une session postée (en attente ou en cours) qui chevauche
+ * `scheduledAt` (une session dure environ 1h30). `excludeId` : session à ignorer (celle qu'on modifie).
+ * @returns {Promise<{ radios: Set<string>, vehicles: Set<string> }>} vehicles : noms normalisés.
+ */
+async function getUsedResources(guildId, scheduledAt, excludeId = null) {
+  const time = scheduledAt.getTime();
+  const sessions = await AtmSession.find({
+    guildId,
+    scheduledAt: { $gt: new Date(time - SESSION_DURATION), $lt: new Date(time + SESSION_DURATION) },
+  });
+  const active = sessions.filter(
+    (session) =>
+      ['pending', 'in_progress'].includes(session.status) &&
+      session.messageId &&
+      String(session._id) !== String(excludeId),
+  );
+  return {
+    radios: new Set(active.map((session) => session.radio)),
+    vehicles: new Set(active.map((session) => normalizeVehicle(session.vehicle))),
+  };
+}
+
+/** Radios et véhicules encore disponibles (« Autre » reste toujours proposé). */
+function getAvailableChoices(used) {
+  return {
+    radios: RADIOS.filter((radio) => !used.radios.has(radio.value)),
+    vehicles: VEHICLES.filter(
+      (vehicle) => vehicle.value === VEHICLE_OTHER || !used.vehicles.has(normalizeVehicle(vehicle.label)),
+    ),
+  };
+}
+
+/** Le véhicule (libellé ou plaque) est-il déjà utilisé ? */
+const isVehicleUsed = (used, vehicle) => Boolean(vehicle) && used.vehicles.has(normalizeVehicle(vehicle));
+
 /** Lien vers le message d'une session. */
 const sessionUrl = (session) =>
   `https://discord.com/channels/${session.guildId}/${session.channelId}/${session.messageId}`;
@@ -220,6 +260,9 @@ module.exports = {
   getMinAgents,
   findConflictingSessions,
   checkSessionDate,
+  getUsedResources,
+  getAvailableChoices,
+  isVehicleUsed,
   canManageSession,
   findTodaySessionsForUser,
   sessionUrl,

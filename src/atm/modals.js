@@ -5,7 +5,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { RADIOS, TENUES, VEHICLES } = require('./constants');
+const { TENUES } = require('./constants');
 
 /** Identifiants des champs des modals. */
 const FIELDS = {
@@ -74,15 +74,18 @@ const selectLabel = (label, customId, choices, placeholder, selected) =>
 const HOUR_CHOICES = Array.from({ length: 24 }, (_, h) => ({ value: String(h).padStart(2, '0'), label: `${String(h).padStart(2, '0')} h` }));
 const MINUTE_CHOICES = Array.from({ length: 12 }, (_, i) => ({ value: String(i * 5).padStart(2, '0'), label: String(i * 5).padStart(2, '0') }));
 
-/** Modal « Informations générales » de l'aperçu /atm : tenue, radio, véhicule (et plaque si « Autre »). */
-function buildInfoModal(draft) {
+/**
+ * Modal « Informations générales » de l'aperçu /atm : tenue, radio, véhicule (et plaque si « Autre »).
+ * @param {{ radios: object[], vehicles: object[] }} choices Radios et véhicules encore disponibles à cette heure-là.
+ */
+function buildInfoModal(draft, choices) {
   return new ModalBuilder()
     .setCustomId(`atm:infosub:${draft._id}`)
     .setTitle('Informations générales')
     .addLabelComponents(
       selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', draft.tenue),
-      selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', draft.radio),
-      selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule', draft.vehicle),
+      selectLabel('Fréquence radio', FIELDS.radio, choices.radios, 'Sélectionne la fréquence radio', draft.radio),
+      selectLabel('Choix du véhicule', FIELDS.vehicle, choices.vehicles, 'Sélectionne le véhicule', draft.vehicle),
       new LabelBuilder()
         .setLabel('Plaque du véhicule (si « Autre »)')
         .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')
