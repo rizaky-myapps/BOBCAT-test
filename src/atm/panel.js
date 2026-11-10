@@ -4,65 +4,78 @@ const {
   ButtonStyle,
   ContainerBuilder,
   MessageFlags,
+  SectionBuilder,
   TextDisplayBuilder,
 } = require('discord.js');
+const PdsAtm = require('../models/PdsAtm');
+const { config } = require('../config');
 const { STATUSES, findLabel } = require('./constants');
-const { sessionUrl } = require('./service');
-const { toUnix } = require('../utils/date');
+const { dayKey, toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
 
 const button = (customId, style, emoji, label) =>
   new ButtonBuilder().setCustomId(customId).setStyle(style).setEmoji(emoji).setLabel(label);
+const labelButton = (customId, style, label) => new ButtonBuilder().setCustomId(customId).setStyle(style).setLabel(label);
+const row = (...buttons) => new ActionRowBuilder().addComponents(buttons);
 
 /**
  * Panneau de gestion (éphémère) ouvert par le bouton ⚙️ d'une session postée.
- * - En attente : Annuler, Dispatching, Informations, Commencer
- * - En cours : Nouvelle PDS, Finir la session
+ * - En attente : ❌ (annuler), Modifier les informations, Gestion du Dispatch, Commencer la session
+ * - En cours : ❌ (terminer), Nouvelle PDS
  * @param {import('../models/AtmSession')} session
- * @param {string} [notice] Message affiché sous le résumé.
+ * @param {string} [notice] Message affiché sous le résumé (retour d'une action).
  */
-function renderSessionPanel(session, notice) {
+async function renderSessionPanel(session, notice) {
   const id = session._id.toString();
   const ts = toUnix(session.scheduledAt);
+  const inProgress = session.status === 'in_progress';
 
-  const text = [
-    '## ⚙️ Gestion de la session ATM',
+  // ATM remplis le jour de la session (même compteur que le numéro des PDS) et sur la session.
+  const [today, onSession] = await Promise.all([
+    PdsAtm.countDocuments({ guildId: session.guildId, dayKey: dayKey(session.scheduledAt, config.timezone) }),
+    inProgress ? PdsAtm.countDocuments({ sessionId: session._id }) : 0,
+  ]);
+
+  const lines = [
     `> **Date :** <t:${ts}:d> à <t:${ts}:t> (<t:${ts}:R>)`,
     `> **Statut :** \`${findLabel(STATUSES, session.status)}\``,
-    `> [Voir la session](${sessionUrl(session)})`,
+    `> **Nombre d'ATM remplis aujourd'hui :** \`${today}\``,
   ];
-  if (notice) text.push('', notice);
+  if (inProgress) lines.push(`> **Nombre d'ATM remplis sur la session :** \`${onSession}\``);
+  if (notice) lines.push('', notice);
 
-  const buttons =
-    session.status === 'in_progress'
-      ? [
-          button(`atm:ppds:${id}`, ButtonStyle.Primary, '📦', 'Nouvelle PDS'),
-          button(`atm:pfinish:${id}`, ButtonStyle.Danger, '🏁', 'Finir la session'),
-        ]
-      : [
-          button(`atm:pcancel:${id}:panel`, ButtonStyle.Danger, '🛑', 'Annuler'),
-          button(`atm:pdispatch:${id}`, ButtonStyle.Primary, '👥', 'Dispatching'),
-          button(`atm:pinfo:${id}`, ButtonStyle.Secondary, '📝', 'Informations'),
-          button(`atm:pstart:${id}`, ButtonStyle.Success, '▶️', 'Commencer'),
-        ];
+  // ❌ : annule la session avant son début, la termine pendant (avec double vérification).
+  const close = new ButtonBuilder()
+    .setCustomId(inProgress ? `atm:pfinish:${id}` : `atm:pcancel:${id}:panel`)
+    .setStyle(ButtonStyle.Danger)
+    .setEmoji('❌');
 
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(text.join('\n')))
-    .addActionRowComponents(new ActionRowBuilder().addComponents(buttons));
+  const container = new ContainerBuilder().addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n')))
+      .setButtonAccessory(close),
+  );
 
-  // Dispatching en plusieurs étapes : Discord ne permet pas d'enchaîner deux modals.
-  if (session.status === 'pending' && session.pendingDispatch?.length) {
+  if (inProgress) {
+    container.addActionRowComponents(row(button(`atm:ppds:${id}`, ButtonStyle.Secondary, '🏧', 'Nouvelle PDS')));
+  } else {
     container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        button(`atm:pdriver:${id}`, ButtonStyle.Primary, '🚙', 'Choisir le conducteur'),
+      row(
+        labelButton(`atm:pinfo:${id}`, ButtonStyle.Secondary, 'Modifier les informations'),
+        labelButton(`atm:pdispatch:${id}`, ButtonStyle.Secondary, 'Gestion du Dispatch'),
       ),
     );
-  } else if (session.status === 'pending' && session.pendingReplacement) {
-    container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        button(`atm:preplace:${id}`, ButtonStyle.Primary, '👥', 'Choisir les remplaçants'),
-      ),
-    );
+    // Dispatching en plusieurs étapes : Discord ne permet pas d'enchaîner deux modals.
+    if (session.pendingDispatch?.length) {
+      container.addActionRowComponents(
+        row(button(`atm:pdriver:${id}`, ButtonStyle.Primary, '🚙', 'Choisir le conducteur')),
+      );
+    } else if (session.pendingReplacement) {
+      container.addActionRowComponents(
+        row(button(`atm:preplace:${id}`, ButtonStyle.Primary, '👥', 'Choisir les remplaçants')),
+      );
+    }
+    container.addActionRowComponents(row(labelButton(`atm:pstart:${id}`, ButtonStyle.Success, 'Commencer la session')));
   }
 
   return {
@@ -72,20 +85,33 @@ function renderSessionPanel(session, notice) {
   };
 }
 
+const CONFIRMS = {
+  cancel: (id, source) => ({
+    text: "## ⚠️ Annuler la session ATM ?\nTu devras ensuite indiquer la raison de l'annulation. Cette action est définitive.",
+    button: button(`atm:pcancelok:${id}:${source}`, ButtonStyle.Danger, '🛑', 'Oui, annuler la session'),
+  }),
+  finish: (id) => ({
+    text: '## ⚠️ Terminer la session ATM ?\nTous les boutons de la session et de ses PDS seront désactivés. Cette action est définitive.',
+    button: button(`atm:pfinishok:${id}`, ButtonStyle.Danger, '🏁', 'Oui, terminer la session'),
+  }),
+  start: (id, source, session) => ({
+    text: [
+      '## ⚠️ Commencer la session ATM ?',
+      'Les agents présents sur le dispatch sont-ils **tous autour de la table** ?',
+      ...session.dispatch.map((agent) => `> - <@${agent.userId}>`),
+    ].join('\n'),
+    button: button(`atm:pstartok:${id}`, ButtonStyle.Success, '✅', 'Oui, ils sont tous là'),
+  }),
+};
+
 /**
- * Double vérification avant d'annuler ou de terminer une session.
- * @param {'cancel'|'finish'} action
+ * Double vérification avant d'annuler, de terminer ou de commencer une session.
+ * @param {'cancel'|'finish'|'start'} action
  * @param {string} [source] "panel" (panneau ⚙️) ou "check" (question du salon CO-ATM)
  */
 function renderConfirm(session, action, source = 'panel') {
   const id = session._id.toString();
-  const cancel = action === 'cancel';
-  const text = cancel
-    ? "## ⚠️ Annuler la session ATM ?\nTu devras ensuite indiquer la raison de l'annulation. Cette action est définitive."
-    : '## ⚠️ Terminer la session ATM ?\nTous les boutons de la session et de ses PDS seront désactivés. Cette action est définitive.';
-  const confirm = cancel
-    ? button(`atm:pcancelok:${id}:${source}`, ButtonStyle.Danger, '🛑', 'Oui, annuler la session')
-    : button(`atm:pfinishok:${id}`, ButtonStyle.Danger, '🏁', 'Oui, terminer la session');
+  const { text, button: confirm } = CONFIRMS[action](id, source, session);
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))

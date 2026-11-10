@@ -95,7 +95,7 @@ async function handleBack(interaction, [id, source = 'panel']) {
   const session = await loadManageable(interaction, id);
   if (!session) return;
   if (CLOSED_STATUSES.includes(session.status)) return interaction.update(textMessage('🔒 Cette session est clôturée.'));
-  return interaction.update(renderSessionPanel(session));
+  return interaction.update(await renderSessionPanel(session));
 }
 
 async function handleCancelModal(interaction, [id]) {
@@ -185,7 +185,7 @@ async function continueWithGroup(interaction, session, group, intro) {
   if (!group.length) return finalizeDispatch(interaction, session, []);
   const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { pendingDispatch: group } }, AFTER);
   return interaction.update(
-    renderSessionPanel(
+    await renderSessionPanel(
       updated,
       `${intro}👥 Agents : ${group.map((userId) => `<@${userId}>`).join(', ')}.\nClique sur « Choisir le conducteur » pour terminer le dispatching.`,
     ),
@@ -218,14 +218,14 @@ async function finalizeDispatch(interaction, session, agents) {
   }
 
   const updated = await AtmSession.findOneAndUpdate({ _id: session._id, status: 'pending' }, update, AFTER);
-  if (!updated) return interaction.update(renderSessionPanel(session, STATUS_ERRORS.pending));
+  if (!updated) return interaction.update(await renderSessionPanel(session, STATUS_ERRORS.pending));
   await syncSessionMessage(interaction.client, updated);
 
   const notice = ['✅ Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.'];
   if (replaced.length) {
     notice.push(...replaced.map((agent) => `🔄 <@${agent.userId}> retiré de la session : ${agent.reason}`));
   }
-  return interaction.update(renderSessionPanel(updated, notice.join('\n')));
+  return interaction.update(await renderSessionPanel(updated, notice.join('\n')));
 }
 
 async function handleDispatchModal(interaction, [id]) {
@@ -235,7 +235,7 @@ async function handleDispatchModal(interaction, [id]) {
   const candidates = getCandidates(session);
   const selected = interaction.fields.getStringSelectValues(FIELDS.agents).filter((userId) => candidates.includes(userId));
   const error = checkAgentGroup(interaction.guild, session, selected);
-  if (error) return interaction.update(renderSessionPanel(session, error));
+  if (error) return interaction.update(await renderSessionPanel(session, error));
   return continueWithGroup(interaction, session, selected, '');
 }
 
@@ -260,7 +260,7 @@ async function handleReplaceModal(interaction, [id]) {
   const freeSlots = getAgentSlots(session).maxAgents - dispatched.length;
   if (!toReplace.length && freeSlots <= 0) {
     return interaction.update(
-      renderSessionPanel(session, '❌ Indique la raison du remplacement pour au moins un agent (le dispatch est complet).'),
+      await renderSessionPanel(session, '❌ Indique la raison du remplacement pour au moins un agent (le dispatch est complet).'),
     );
   }
 
@@ -271,7 +271,7 @@ async function handleReplaceModal(interaction, [id]) {
   );
   const lines = toReplace.map((agent) => `🔄 <@${agent.userId}> : ${agent.reason}`);
   return interaction.update(
-    renderSessionPanel(
+    await renderSessionPanel(
       updated,
       [
         toReplace.length ? `**Agents à remplacer :**\n${lines.join('\n')}` : '**Aucun agent à remplacer.**',
@@ -302,7 +302,7 @@ async function handleReplacePickButton(interaction, [id]) {
   // Personne d'autre n'a voté : les agents remplacés sont simplement retirés.
   if (!candidates.length || max <= 0) {
     const error = checkAgentGroup(interaction.guild, session, kept, { allowEmpty: true });
-    if (error) return interaction.update(renderSessionPanel(session, error));
+    if (error) return interaction.update(await renderSessionPanel(session, error));
     return continueWithGroup(interaction, session, kept, "ℹ️ Aucun autre agent disponible : pas de remplaçant.\n");
   }
 
@@ -314,7 +314,7 @@ async function handleReplacePickModal(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
   if (!session.pendingReplacement) {
-    return interaction.update(renderSessionPanel(session, '❌ Remplacement expiré : recommence avec « Dispatching ».'));
+    return interaction.update(await renderSessionPanel(session, '❌ Remplacement expiré : recommence avec « Dispatching ».'));
   }
 
   const candidates = getCandidates(session);
@@ -323,7 +323,7 @@ async function handleReplacePickModal(interaction, [id]) {
   );
   const group = [...getKeptAgents(session), ...picked];
   const error = checkAgentGroup(interaction.guild, session, group, { allowEmpty: true });
-  if (error) return interaction.update(renderSessionPanel(session, error));
+  if (error) return interaction.update(await renderSessionPanel(session, error));
   return continueWithGroup(interaction, session, group, '');
 }
 
@@ -363,7 +363,7 @@ async function handleDriverModal(interaction, [id]) {
       error = '❌ Sélectionne un U2R.';
     } else if (motoId === driverId) error = "❌ Le conducteur ne peut pas être l'U2R.";
   }
-  if (error) return interaction.update(renderSessionPanel(session, error));
+  if (error) return interaction.update(await renderSessionPanel(session, error));
 
   // L'U2R est placé en dernier.
   const agents = [...pending.filter((userId) => userId !== motoId), ...(motoId ? [motoId] : [])].map((userId) => ({
@@ -397,11 +397,11 @@ async function handleInfoModal(interaction, [id]) {
   let error = null;
   if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = '❌ Réponses invalides.';
   else if (!vehicle) error = '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule.';
-  if (error) return interaction.update(renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
+  if (error) return interaction.update(await renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
 
   const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { radio, tenue, vehicle } }, AFTER);
   await syncSessionMessage(interaction.client, updated);
-  return interaction.update(renderSessionPanel(updated, '✅ Informations de la session mises à jour.'));
+  return interaction.update(await renderSessionPanel(updated, '✅ Informations de la session mises à jour.'));
 }
 
 /* ------------------------------------------------------------------ */
@@ -411,18 +411,28 @@ async function handleInfoModal(interaction, [id]) {
 async function handleStartButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
-  if (session.dispatch.length < MIN_DISPATCH) {
-    return interaction.update(
-      renderSessionPanel(
-        session,
-        `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`,
-      ),
-    );
-  }
+  const error = startError(session);
+  if (error) return interaction.update(await renderSessionPanel(session, error));
+  // Double vérification : tous les agents du dispatch doivent être autour de la table.
+  return interaction.update(renderConfirm(session, 'start'));
+}
+
+/** Il faut un nombre minimum de personnes sur le dispatch pour commencer. */
+function startError(session) {
+  if (session.dispatch.length >= MIN_DISPATCH) return null;
+  return `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`;
+}
+
+/** « Oui, ils sont tous là » : la session commence. */
+async function handleStartConfirm(interaction, [id]) {
+  const session = await loadManageable(interaction, id, 'pending');
+  if (!session) return;
+  const error = startError(session);
+  if (error) return interaction.update(await renderSessionPanel(session, error));
 
   const started = await startSession(interaction.client, session._id);
-  if (!started) return interaction.update(renderSessionPanel(session, STATUS_ERRORS.pending));
-  return interaction.update(renderSessionPanel(started, '▶️ Session commencée.'));
+  if (!started) return interaction.update(await renderSessionPanel(session, STATUS_ERRORS.pending));
+  return interaction.update(await renderSessionPanel(started, '▶️ Session commencée.'));
 }
 
 async function handleFinishButton(interaction, [id]) {
@@ -462,10 +472,10 @@ async function handlePdsModal(interaction, [id]) {
   const mallettes = Number(interaction.fields.getStringSelectValues(FIELDS.mallettes)[0]);
   const [attachment] = getUploadedFiles(interaction, FIELDS.photo);
   if (!Number.isInteger(mallettes) || mallettes < 1 || mallettes > MAX_MALLETTES) {
-    return interaction.update(renderSessionPanel(session, '❌ Nombre de mallettes invalide.'));
+    return interaction.update(await renderSessionPanel(session, '❌ Nombre de mallettes invalide.'));
   }
   if (!attachment?.contentType?.startsWith('image/')) {
-    return interaction.update(renderSessionPanel(session, "❌ Ajoute une photo (image) de l'emplacement de l'ATM."));
+    return interaction.update(await renderSessionPanel(session, "❌ Ajoute une photo (image) de l'emplacement de l'ATM."));
   }
 
   // L'envoi de la photo sur Cloudinary peut dépasser les 3 secondes accordées par Discord.
@@ -473,11 +483,11 @@ async function handlePdsModal(interaction, [id]) {
   try {
     const { pds, message } = await createPds(interaction, session, { mallettes, attachment });
     return interaction.editReply(
-      renderSessionPanel(session, `📦 PDS n°${String(pds.number).padStart(2, '0')} envoyée : ${message.url}`),
+      await renderSessionPanel(session, `📦 PDS n°${String(pds.number).padStart(2, '0')} envoyée : ${message.url}`),
     );
   } catch (error) {
     console.error('[PDS] Création impossible :', error);
-    return interaction.editReply(renderSessionPanel(session, `❌ Impossible d'envoyer la PDS : ${error.message}`));
+    return interaction.editReply(await renderSessionPanel(session, `❌ Impossible d'envoyer la PDS : ${error.message}`));
   }
 }
 
@@ -497,6 +507,7 @@ module.exports = {
   handleInfoButton,
   handleInfoModal,
   handleStartButton,
+  handleStartConfirm,
   handleFinishButton,
   handleFinishConfirm,
   handlePdsButton,

@@ -83,7 +83,7 @@ async function handleManageButton(interaction, [id]) {
     return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
   }
 
-  const panel = renderSessionPanel(session);
+  const panel = await renderSessionPanel(session);
   return interaction.reply({ ...panel, flags: panel.flags | MessageFlags.Ephemeral });
 }
 

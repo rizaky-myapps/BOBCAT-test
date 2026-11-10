@@ -39,6 +39,7 @@ const componentHandlers = {
   'atm:pinfo': panel.handleInfoButton,
   'atm:pinfosub': panel.handleInfoModal,
   'atm:pstart': panel.handleStartButton,
+  'atm:pstartok': panel.handleStartConfirm,
   'atm:ppds': panel.handlePdsButton,
   'atm:ppdssub': panel.handlePdsModal,
   'atm:pfinish': panel.handleFinishButton,
