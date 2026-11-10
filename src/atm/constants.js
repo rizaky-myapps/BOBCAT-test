@@ -63,7 +63,7 @@ const MIN_DISPATCH = config.atmMinAgents;
  * Taille du carré des photos de PDS par rapport à la hauteur de la capture : assez petit pour exclure
  * le HUD de la carte (barre d'instructions en bas, légende à droite), centré sur la croix.
  */
-const PDS_CROP_RATIO = 0.8;
+const PDS_CROP_RATIO = 0.7;
 
 /** Nombre de mallettes proposé dans le modal « Nouvelle PDS ». */
 const MAX_MALLETTES = 5;
