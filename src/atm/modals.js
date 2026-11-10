@@ -5,7 +5,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { TENUES } = require('./constants');
+const { MAX_PLATE_LENGTH, TENUES } = require('./constants');
 
 /** Identifiants des champs des modals. */
 const FIELDS = {
@@ -48,7 +48,7 @@ const vehicleOtherInput = (value, required) =>
       .setCustomId(FIELDS.vehicleOther)
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Ex : XYZ 789')
-      .setMaxLength(32)
+      .setMaxLength(MAX_PLATE_LENGTH)
       .setRequired(required),
     value,
   );
@@ -88,7 +88,7 @@ function buildInfoModal(draft, choices) {
       selectLabel('Choix du véhicule', FIELDS.vehicle, choices.vehicles, 'Sélectionne le véhicule', draft.vehicle),
       new LabelBuilder()
         .setLabel('Plaque du véhicule (si « Autre »)')
-        .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')
+        .setDescription('Uniquement si « Autre » est sélectionné : 8 caractères max (lettres, chiffres, espaces).')
         .setTextInputComponent(vehicleOtherInput(draft.plate, false)),
     );
 }

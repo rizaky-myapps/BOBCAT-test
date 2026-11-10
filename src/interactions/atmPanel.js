@@ -10,6 +10,7 @@ const {
   RADIOS,
   TENUES,
   VEHICLES,
+  VEHICLE_OTHER,
 } = require('../atm/constants');
 const { cancelSession, finishSession, startSession } = require('../atm/lifecycle');
 const { FIELDS, getUploadedFiles, truncate } = require('../atm/modals');
@@ -32,6 +33,7 @@ const {
   getDispatchedAgents,
   getAvailableChoices,
   getMinAgents,
+  getPlateError,
   getUsedResources,
   isBiker,
   isVehicleUsed,
@@ -401,14 +403,15 @@ async function handleInfoModal(interaction, [id]) {
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [tenue] = fields.getStringSelectValues(FIELDS.tenue);
   const [vehicleChoice] = fields.getStringSelectValues(FIELDS.vehicle);
-  const vehicle = resolveVehicle(vehicleChoice, fields.getTextInputValue(FIELDS.vehicleOther));
+  const rawPlate = fields.getTextInputValue(FIELDS.vehicleOther);
+  const vehicle = resolveVehicle(vehicleChoice, rawPlate);
 
   const used = await getUsedResources(session.guildId, session.scheduledAt, session._id);
   const choices = getAvailableChoices(used);
 
   let error = null;
   if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = '❌ Réponses invalides.';
-  else if (!vehicle) error = '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule.';
+  else if (vehicleChoice === VEHICLE_OTHER && getPlateError(rawPlate)) error = getPlateError(rawPlate);
   else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice)) {
     error = '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.';
   } else if (isVehicleUsed(used, vehicle)) {

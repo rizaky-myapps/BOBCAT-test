@@ -3,6 +3,7 @@ const AtmSession = require('../models/AtmSession');
 const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
 const {
+  MAX_PLATE_LENGTH,
   MIN_DISPATCH,
   MIN_POST_DELAY,
   RADIOS,
@@ -17,6 +18,22 @@ const { dayKey, getDayBounds, toUnix } = require('../utils/date');
 function resolveVehicle(value, plate) {
   if (value === VEHICLE_OTHER) return plate?.trim() || null;
   return VEHICLES.find((vehicle) => vehicle.value === value)?.label ?? null;
+}
+
+/**
+ * Vérifie la plaque saisie pour le véhicule « Autre » : 8 caractères maximum, uniquement des lettres,
+ * des chiffres et des espaces, et pas uniquement des espaces.
+ * @returns {string|null} Le message d'erreur, ou null si la plaque est valide.
+ */
+function getPlateError(plate) {
+  const value = String(plate ?? '');
+  if (!value.trim()) {
+    return '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule (elle ne peut pas contenir que des espaces).';
+  }
+  if (value.length > MAX_PLATE_LENGTH || !/^[A-Za-z0-9 ]+$/.test(value)) {
+    return `❌ La plaque doit faire ${MAX_PLATE_LENGTH} caractères maximum : lettres, chiffres et espaces uniquement.`;
+  }
+  return null;
 }
 
 /** Mention utilisée quand le ping des agents est activé : rôle employés du .env, sinon @everyone. */
@@ -248,6 +265,7 @@ async function syncSessionMessage(client, session) {
 
 module.exports = {
   resolveVehicle,
+  getPlateError,
   getPingMention,
   isCoAtm,
   needsSupervisor,

@@ -2,7 +2,7 @@ const { isValidObjectId } = require('mongoose');
 const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
-const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
+const { RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
 const {
   FIELDS,
   HOUR_CHOICES,
@@ -18,6 +18,7 @@ const {
   findConflictingSessions,
   getAvailableChoices,
   getConfirmedSupervisorId,
+  getPlateError,
   getUsedResources,
   isVehicleUsed,
   isCoAtm,
@@ -145,7 +146,8 @@ async function handleInfoModal(interaction, [id]) {
   const [tenue] = fields.getStringSelectValues(FIELDS.tenue);
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
-  const plate = fields.getTextInputValue(FIELDS.vehicleOther).trim();
+  const rawPlate = fields.getTextInputValue(FIELDS.vehicleOther);
+  const plate = rawPlate.trim();
 
   if (!draft.scheduledAt) return interaction.reply(ephemeralText(NO_DATE_MESSAGE));
   const used = await getUsedResources(draft.guildId, draft.scheduledAt);
@@ -153,11 +155,8 @@ async function handleInfoModal(interaction, [id]) {
   if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle)) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
-  if (!resolveVehicle(vehicle, plate)) {
-    return interaction.reply(
-      ephemeralText('❌ Tu as choisi « Autre » : renseigne la plaque du véhicule. Aucune modification enregistrée.'),
-    );
-  }
+  const plateError = vehicle === VEHICLE_OTHER ? getPlateError(rawPlate) : null;
+  if (plateError) return interaction.reply(ephemeralText(`${plateError} Aucune modification enregistrée.`));
   if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle)) {
     return interaction.reply(
       ephemeralText(

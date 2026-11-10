@@ -16,6 +16,8 @@ const RADIOS = [
 ];
 
 const VEHICLE_OTHER = 'autre';
+/** Longueur maximale d'une plaque saisie pour le véhicule « Autre » (lettres, chiffres et espaces). */
+const MAX_PLATE_LENGTH = 8;
 
 const VEHICLES = [
   { value: 'zjr325', label: 'ZJR 325' },
@@ -119,6 +121,7 @@ module.exports = {
   RADIOS,
   VEHICLES,
   VEHICLE_OTHER,
+  MAX_PLATE_LENGTH,
   STATUSES,
   CLOSED_STATUSES,
   CANCELLED_ACCENT_COLOR,

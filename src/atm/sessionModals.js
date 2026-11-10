@@ -147,7 +147,7 @@ function buildSessionInfoModal(session, choices) {
       selectLabel('Choix du véhicule', FIELDS.vehicle, choices.vehicles, 'Sélectionne le véhicule', preset?.value ?? VEHICLE_OTHER),
       new LabelBuilder()
         .setLabel('Plaque du véhicule (si « Autre »)')
-        .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')
+        .setDescription('Uniquement si « Autre » est sélectionné : 8 caractères max (lettres, chiffres, espaces).')
         .setTextInputComponent(vehicleOtherInput(preset ? '' : session.vehicle, false)),
       selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', session.tenue),
     );
