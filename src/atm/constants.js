@@ -102,6 +102,8 @@ const SUPERVISOR_ROLE_GRACE = 60 * MINUTE;
 const SUPERVISOR_ROLE_CHECK_INTERVAL = MINUTE;
 /** Délai après l'heure prévue avant de demander au CO-ATM si une session non commencée est maintenue. */
 const START_CHECK_DELAY = 30 * MINUTE;
+/** Une session peut commencer jusqu'à 10 minutes avant son heure prévue (le même jour). */
+const START_EARLY_WINDOW = 10 * MINUTE;
 /** Délai pour commencer une session maintenue, sinon elle est annulée. */
 const START_DEADLINE = 10 * MINUTE;
 /** Fréquence de vérification des sessions non commencées. */
@@ -150,6 +152,7 @@ module.exports = {
   SUPERVISOR_ROLE_CHECK_INTERVAL,
   START_CHECK_DELAY,
   START_DEADLINE,
+  START_EARLY_WINDOW,
   SESSION_CHECK_INTERVAL,
   SESSION_DURATION,
   MIN_POST_DELAY,
