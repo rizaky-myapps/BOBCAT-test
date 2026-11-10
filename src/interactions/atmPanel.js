@@ -466,7 +466,7 @@ function startError(session) {
     const ts = toUnix(session.scheduledAt);
     if (now < start - START_EARLY_WINDOW) {
       const earliest = toUnix(new Date(start - START_EARLY_WINDOW));
-      return `❌ La session peut commencer au plus tôt 10 minutes avant l'heure prévue (<t:${ts}:t>) : à partir de <t:${earliest}:t> (<t:${earliest}:R>).`;
+      return `❌ La session est prévue le <t:${ts}:d> à <t:${ts}:t> : elle peut commencer au plus tôt 10 minutes avant, à partir du <t:${earliest}:d> à <t:${earliest}:t> (<t:${earliest}:R>).`;
     }
   }
   if (session.dispatch.length >= MIN_DISPATCH) return null;
