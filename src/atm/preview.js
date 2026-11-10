@@ -1,5 +1,4 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, MessageFlags } = require('discord.js');
-const { VEHICLE_OTHER } = require('./constants');
 const { buildMainContainer } = require('./message');
 const {
   buildDispatch,
@@ -48,42 +47,34 @@ function renderPreview(draft, guild) {
     { manageCustomId: 'atm:manage:preview', manageDisabled: true },
   );
 
+  const withSupervisor = needsSupervisor(guild, draft);
+  const accepted = Boolean(getConfirmedSupervisorId(draft));
+  const row = (...buttons) => new ActionRowBuilder().addComponents(buttons);
+  const button = (action, style, emoji, label) =>
+    new ButtonBuilder().setCustomId(`atm:${action}:${id}`).setStyle(style).setEmoji(emoji).setLabel(label);
+
   // Tant que le superviseur n'a pas répondu, les informations ne sont pas modifiables.
-  const buttons = [
-    new ButtonBuilder()
-      .setCustomId(`atm:info:${id}`)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('📝')
-      .setLabel('Informations')
-      .setDisabled(locked),
+  const rows = [
+    row(button('info', ButtonStyle.Secondary, 'ℹ️', 'Informations générales').setDisabled(locked)),
+    row(button('date', ButtonStyle.Secondary, '🕑', "Choisir la date et l'heure").setDisabled(locked)),
   ];
-
-  if (draft.vehicle === VEHICLE_OTHER) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(`atm:plate:${id}`)
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🚙')
-        .setLabel('Choisir la plaque')
-        .setDisabled(locked),
-    );
+  // Uniquement pour les membres sans le rôle CO ATM ; plus modifiable une fois la présence validée.
+  if (withSupervisor) {
+    rows.push(row(button('sup', ButtonStyle.Secondary, '🛡️', 'Sélectionner un superviseur').setDisabled(locked || accepted)));
   }
-
-  buttons.push(
-    new ButtonBuilder()
-      .setCustomId(`atm:ping:${id}`)
-      .setStyle(draft.ping ? ButtonStyle.Success : ButtonStyle.Danger)
-      .setEmoji(draft.ping ? '🔔' : '🔕')
-      .setLabel(`Ping agents : ${draft.ping ? 'OUI' : 'NON'}`),
-    new ButtonBuilder()
-      .setCustomId(`atm:send:${id}`)
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('📨')
-      .setLabel('Envoyer')
-      .setDisabled(!isDraftComplete(draft, guild)),
+  rows.push(
+    row(
+      button(
+        'ping',
+        draft.ping ? ButtonStyle.Success : ButtonStyle.Danger,
+        draft.ping ? '🔔' : '🔕',
+        `Ping les agents : ${draft.ping ? 'Oui' : 'Non'}`,
+      ),
+      button('send', ButtonStyle.Primary, '📨', 'Poster la session').setDisabled(!isDraftComplete(draft, guild)),
+    ),
   );
 
-  const actions = new ContainerBuilder().addActionRowComponents(new ActionRowBuilder().addComponents(buttons));
+  const actions = new ContainerBuilder().addActionRowComponents(rows);
 
   return {
     flags: MessageFlags.IsComponentsV2,

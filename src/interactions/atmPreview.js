@@ -3,7 +3,15 @@ const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
 const { RADIOS, TENUES, VEHICLES } = require('../atm/constants');
-const { FIELDS, buildInfoModal, buildPlateModal, truncate } = require('../atm/modals');
+const {
+  FIELDS,
+  HOUR_CHOICES,
+  MINUTE_CHOICES,
+  buildDateModal,
+  buildInfoModal,
+  buildSupervisorChoiceModal,
+  truncate,
+} = require('../atm/modals');
 const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
 const {
   checkSessionDate,
@@ -11,10 +19,11 @@ const {
   getConfirmedSupervisorId,
   isCoAtm,
   publishSession,
+  resolveVehicle,
   sessionUrl,
 } = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
-const { parseDateTime } = require('../utils/date');
+const { formatDateTime, getUpcomingDays, parseDateTime } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
@@ -57,27 +66,45 @@ async function getSupervisorChoices(guild) {
   }));
 }
 
+/**
+ * Envoie la demande de supervision si tout est prêt : un superviseur choisi (créateur sans le rôle CO ATM),
+ * une date valide et aucune demande en attente ou validée.
+ */
+async function sendRequestIfReady(interaction, draft, notices) {
+  if (isCoAtm(interaction.member) || !draft.supervisorId) return;
+  if (['pending', 'accepted'].includes(draft.supervisorRequest?.status)) return;
+  if (!draft.scheduledAt) {
+    notices.push("La demande sera envoyée au superviseur dès que tu auras choisi la date et l'heure.");
+    return;
+  }
+  try {
+    draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
+    notices.push(
+      `📨 Demande envoyée à <@${draft.supervisorId}> dans <#${draft.supervisorRequest.channelId}>.`,
+      "Les informations ne sont plus modifiables jusqu'à sa réponse (10 minutes maximum).",
+    );
+  } catch (error) {
+    console.error('[Supervision] Envoi de la demande impossible :', error);
+    notices.push(`❌ Impossible d'envoyer la demande au superviseur : ${error.message}.`);
+  }
+}
+
+/** Enregistre le brouillon, met à jour l'aperçu et affiche les messages éventuels. */
+async function saveAndRefresh(interaction, draft, notices = []) {
+  await draft.save();
+  await updatePreview(interaction, draft);
+  if (notices.length) await interaction.followUp(ephemeralText(notices.join('\n')));
+}
+
 /* ------------------------------------------------------------------ */
-/* Bouton « Informations » → modal                                     */
+/* Bouton « Informations générales » : tenue, radio, véhicule          */
 /* ------------------------------------------------------------------ */
 
 async function handleInfoButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
   if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
-
-  // Le choix du superviseur n'est proposé qu'aux membres sans le rôle CO ATM,
-  // et plus du tout une fois que le superviseur a validé sa présence.
-  let supervisors = null;
-  if (!isCoAtm(interaction.member) && !getConfirmedSupervisorId(draft)) {
-    supervisors = await getSupervisorChoices(interaction.guild);
-    if (!supervisors.length) {
-      return interaction.reply(
-        ephemeralText('❌ Aucun superviseur enregistré. Utilise la commande `/superviseur` pour en ajouter.'),
-      );
-    }
-  }
-  return interaction.showModal(buildInfoModal(draft, supervisors));
+  return interaction.showModal(buildInfoModal(draft));
 }
 
 async function handleInfoModal(interaction, [id]) {
@@ -86,96 +113,135 @@ async function handleInfoModal(interaction, [id]) {
   if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
 
   const { fields } = interaction;
-  const rawDate = fields.getTextInputValue(FIELDS.date).trim();
   const [tenue] = fields.getStringSelectValues(FIELDS.tenue);
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
-  const coAtm = isCoAtm(interaction.member);
-  // Superviseur ayant validé sa présence : il ne peut plus être changé.
-  const accepted = !coAtm && Boolean(getConfirmedSupervisorId(draft));
-  const askSupervisor = !coAtm && !accepted;
-  let supervisorId = accepted ? draft.supervisorId : null;
-  if (askSupervisor && fields.fields.has(FIELDS.supervisor)) supervisorId = fields.getStringSelectValues(FIELDS.supervisor)[0];
+  const plate = fields.getTextInputValue(FIELDS.vehicleOther).trim();
 
-  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle) || (askSupervisor && !supervisorId)) {
+  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle)) {
     return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
   }
-
-  let scheduledAt = parseDateTime(rawDate, config.timezone);
-  const notices = [];
-  if (!scheduledAt) {
-    notices.push(
-      `❌ La date \`${rawDate}\` est invalide.\nFormat attendu : \`JJ/MM/AAAA HH:MM\` (ex : \`31/10/2026 21:00\`).`,
+  if (!resolveVehicle(vehicle, plate)) {
+    return interaction.reply(
+      ephemeralText('❌ Tu as choisi « Autre » : renseigne la plaque du véhicule. Aucune modification enregistrée.'),
     );
-  } else {
-    // Au moins 10 min à l'avance, et pas pendant une autre session du créateur.
-    const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
-    if (dateError) {
-      notices.push(dateError);
-      scheduledAt = null;
-    }
   }
+
+  draft.set({ tenue, radio, vehicle, plate });
+  return saveAndRefresh(interaction, draft);
+}
+
+/* ------------------------------------------------------------------ */
+/* Bouton « Choisir la date et l'heure »                               */
+/* ------------------------------------------------------------------ */
+
+async function handleDateButton(interaction, [id]) {
+  const draft = await loadDraft(interaction, id);
+  if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
+
+  const days = getUpcomingDays(new Date(), config.timezone);
+  const selected = {};
+  if (draft.scheduledAt) {
+    const [date, time] = formatDateTime(draft.scheduledAt, config.timezone).split(' ');
+    const [dd, mm, yyyy] = date.split('/');
+    const [hour, minute] = time.split(':');
+    Object.assign(selected, { day: `${yyyy}-${mm}-${dd}`, hour, minute });
+  }
+  return interaction.showModal(buildDateModal(draft, days, selected));
+}
+
+async function handleDateModal(interaction, [id]) {
+  const draft = await loadDraft(interaction, id);
+  if (!draft) return;
+  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
+
+  const { fields } = interaction;
+  const [day] = fields.getStringSelectValues(FIELDS.day);
+  const [hour] = fields.getStringSelectValues(FIELDS.hour);
+  const [minute] = fields.getStringSelectValues(FIELDS.minute);
+  const [yyyy, mm, dd] = String(day).split('-');
+  const rawDate = `${dd}/${mm}/${yyyy} ${hour}:${minute}`;
+  const scheduledAt =
+    isIn(HOUR_CHOICES, hour) && isIn(MINUTE_CHOICES, minute) ? parseDateTime(rawDate, config.timezone) : null;
+  if (!scheduledAt) return interaction.reply(ephemeralText('❌ Date invalide, réessaie.'));
+
+  // Au moins 10 min à l'avance, et pas pendant une autre session du créateur.
+  const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
+  if (dateError) return interaction.reply(ephemeralText(`${dateError}\nAucune modification enregistrée.`));
 
   // Le superviseur ne peut pas non plus être sur deux sessions en même temps.
-  if (scheduledAt && supervisorId) {
-    const supervisorError = await checkSupervisorAvailability(draft.guildId, supervisorId, scheduledAt);
-    if (supervisorError) {
-      if (accepted) {
-        notices.push(`${supervisorError}\nTon superviseur ne peut pas être sur deux sessions en même temps : choisis une autre heure.`);
-        scheduledAt = null;
-      } else {
-        notices.push(`${supervisorError}\nChoisis un autre superviseur.`);
-        supervisorId = null;
-      }
-    }
-  }
-
-  draft.set({ rawDate, scheduledAt, tenue, radio, vehicle, supervisorId });
-  if (!accepted) draft.supervisorRequest = null;
-
-  if (!scheduledAt) {
-    if (askSupervisor && supervisorId) notices.push('La demande sera envoyée au superviseur une fois la date corrigée.');
-  } else if (askSupervisor && supervisorId) {
-    try {
-      draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
-      notices.push(
-        `📨 Demande envoyée à <@${supervisorId}> dans <#${draft.supervisorRequest.channelId}>.`,
-        "Les informations ne sont plus modifiables jusqu'à sa réponse (10 minutes maximum).",
+  const notices = [];
+  if (draft.supervisorId && !isCoAtm(interaction.member)) {
+    const supervisorError = await checkSupervisorAvailability(draft.guildId, draft.supervisorId, scheduledAt);
+    if (supervisorError && getConfirmedSupervisorId(draft)) {
+      return interaction.reply(
+        ephemeralText(
+          `${supervisorError}\nTon superviseur ne peut pas être sur deux sessions en même temps : choisis une autre heure.`,
+        ),
       );
-    } catch (error) {
-      console.error('[Supervision] Envoi de la demande impossible :', error);
-      notices.push(`❌ Impossible d'envoyer la demande au superviseur : ${error.message}.`);
+    }
+    if (supervisorError) {
+      notices.push(`${supervisorError}\nChoisis un autre superviseur.`);
+      draft.set({ supervisorId: null, supervisorRequest: null });
     }
   }
 
-  await draft.save();
-  await updatePreview(interaction, draft);
-  if (notices.length) await interaction.followUp(ephemeralText(notices.join('\n')));
+  draft.set({ rawDate, scheduledAt });
+  await sendRequestIfReady(interaction, draft, notices);
+  return saveAndRefresh(interaction, draft, notices);
 }
 
 /* ------------------------------------------------------------------ */
-/* Bouton « Choisir la plaque » (véhicule « Autre »)                   */
+/* Bouton « Sélectionner un superviseur » (membres sans le rôle CO ATM) */
 /* ------------------------------------------------------------------ */
 
-async function handlePlateButton(interaction, [id]) {
+/** Message d'erreur si le superviseur ne peut pas (ou plus) être choisi, sinon null. */
+function supervisorChoiceError(interaction, draft) {
+  if (isCoAtm(interaction.member)) return "ℹ️ Tu as le rôle CO ATM : tu n'as pas besoin de superviseur.";
+  if (isRequestPending(draft)) return LOCKED_MESSAGE;
+  if (getConfirmedSupervisorId(draft)) return '🔒 Ton superviseur a validé sa présence : il ne peut plus être changé.';
+  return null;
+}
+
+async function handleSupervisorButton(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
-  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
-  return interaction.showModal(buildPlateModal(draft));
+  const error = supervisorChoiceError(interaction, draft);
+  if (error) return interaction.reply(ephemeralText(error));
+
+  const supervisors = await getSupervisorChoices(interaction.guild);
+  if (!supervisors.length) {
+    return interaction.reply(
+      ephemeralText('❌ Aucun superviseur enregistré. Utilise la commande `/superviseur` pour en ajouter.'),
+    );
+  }
+  return interaction.showModal(buildSupervisorChoiceModal(draft, supervisors));
 }
 
-async function handlePlateModal(interaction, [id]) {
+async function handleSupervisorModal(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
-  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
+  const error = supervisorChoiceError(interaction, draft);
+  if (error) return interaction.reply(ephemeralText(error));
 
-  draft.plate = interaction.fields.getTextInputValue(FIELDS.vehicleOther).trim();
-  await draft.save();
-  return updatePreview(interaction, draft);
+  const [supervisorId] = interaction.fields.getStringSelectValues(FIELDS.supervisor);
+  if (!supervisorId) return interaction.reply(ephemeralText('❌ Réponse invalide, réessaie.'));
+
+  // Le superviseur ne peut pas être sur deux sessions en même temps.
+  if (draft.scheduledAt) {
+    const supervisorError = await checkSupervisorAvailability(draft.guildId, supervisorId, draft.scheduledAt);
+    if (supervisorError) return interaction.reply(ephemeralText(`${supervisorError}\nChoisis un autre superviseur.`));
+  }
+
+  draft.set({ supervisorId, supervisorRequest: null });
+  const notices = [];
+  await sendRequestIfReady(interaction, draft, notices);
+  return saveAndRefresh(interaction, draft, notices);
 }
 
 /* ------------------------------------------------------------------ */
-/* Bouton « Ping agents : OUI / NON »                                  */
+/* Bouton « Ping les agents : Oui / Non »                              */
 /* ------------------------------------------------------------------ */
 
 async function handlePingButton(interaction, [id]) {
@@ -188,7 +254,7 @@ async function handlePingButton(interaction, [id]) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Bouton « Envoyer »                                                  */
+/* Bouton « Poster la session »                                       */
 /* ------------------------------------------------------------------ */
 
 async function handleSendButton(interaction, [id]) {
@@ -204,7 +270,7 @@ async function handleSendButton(interaction, [id]) {
   // L'heure a pu se rapprocher, ou une autre session a pu être prévue entre-temps.
   const dateError = await checkSessionDate(draft.guildId, draft.userId, draft.scheduledAt);
   if (dateError) {
-    return interaction.reply(ephemeralText(`${dateError}\nModifie la date via « Informations » avant d'envoyer.`));
+    return interaction.reply(ephemeralText(`${dateError}\nModifie la date via « Choisir la date et l'heure » avant de poster la session.`));
   }
   // Le superviseur a pu être placé sur une autre session au même moment depuis sa validation.
   const confirmedSupervisorId = getConfirmedSupervisorId(draft);
@@ -216,7 +282,7 @@ async function handleSendButton(interaction, [id]) {
       await draft.save();
       await updatePreview(interaction, draft);
       return interaction.followUp(
-        ephemeralText(`${supervisorError}\nSa présence est annulée : choisis un autre superviseur via « Informations ».`),
+        ephemeralText(`${supervisorError}\nSa présence est annulée : choisis un autre superviseur via « Sélectionner un superviseur ».`),
       );
     }
   }
@@ -239,8 +305,10 @@ async function handleSendButton(interaction, [id]) {
 module.exports = {
   handleInfoButton,
   handleInfoModal,
-  handlePlateButton,
-  handlePlateModal,
+  handleDateButton,
+  handleDateModal,
+  handleSupervisorButton,
+  handleSupervisorModal,
   handlePingButton,
   handleSendButton,
 };

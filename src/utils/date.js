@@ -85,7 +85,35 @@ function getDayBounds(date, timeZone) {
   };
 }
 
+const plural = (count, word) => `${count} ${word}${count > 1 ? 's' : ''}`;
+
+/**
+ * Aujourd'hui et les `count - 1` jours suivants, pour le menu des dates :
+ * "Mardi 10/11/2026 (aujourd'hui)", "Mercredi 11/11/2026 (demain dans 3 heures)", "Jeudi 12/11/2026"…
+ * @returns {{ value: string, label: string }[]} value au format "AAAA-MM-JJ".
+ */
+function getUpcomingDays(now, timeZone, count = 7) {
+  const [day, month, year] = formatDate(now, timeZone).split('/').map(Number);
+  const msUntilTomorrow = getDayBounds(now, timeZone).end.getTime() - now.getTime();
+  const hours = Math.floor(msUntilTomorrow / 3_600_000);
+  const tomorrowIn = hours >= 1 ? plural(hours, 'heure') : plural(Math.max(1, Math.ceil(msUntilTomorrow / 60_000)), 'minute');
+  const pad = (n) => String(n).padStart(2, '0');
+
+  return Array.from({ length: count }, (_, i) => {
+    // Date calendaire (midi UTC) : pas de décalage de fuseau possible.
+    const date = new Date(Date.UTC(year, month - 1, day + i, 12));
+    const weekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', timeZone: 'UTC' }).format(date);
+    const dd = pad(date.getUTCDate());
+    const mm = pad(date.getUTCMonth() + 1);
+    const yyyy = date.getUTCFullYear();
+    let label = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${dd}/${mm}/${yyyy}`;
+    if (i === 0) label += " (aujourd'hui)";
+    if (i === 1) label += ` (demain dans ${tomorrowIn})`;
+    return { value: `${yyyy}-${mm}-${dd}`, label };
+  });
+}
+
 /** Timestamp Unix (secondes) utilisé par les balises <t:...> de Discord. */
 const toUnix = (date) => Math.floor(date.getTime() / 1000);
 
-module.exports = { parseDateTime, formatDateTime, formatDate, dayKey, getDayBounds, toUnix };
+module.exports = { parseDateTime, formatDateTime, formatDate, dayKey, getDayBounds, getUpcomingDays, toUnix };

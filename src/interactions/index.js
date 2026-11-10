@@ -14,8 +14,10 @@ const componentHandlers = {
   // Aperçu de /atm
   'atm:info': preview.handleInfoButton,
   'atm:infosub': preview.handleInfoModal,
-  'atm:plate': preview.handlePlateButton,
-  'atm:platesub': preview.handlePlateModal,
+  'atm:date': preview.handleDateButton,
+  'atm:datesub': preview.handleDateModal,
+  'atm:sup': preview.handleSupervisorButton,
+  'atm:supsub': preview.handleSupervisorModal,
   'atm:ping': preview.handlePingButton,
   'atm:send': preview.handleSendButton,
   'atm:force': showPreview,

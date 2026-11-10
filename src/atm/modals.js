@@ -9,7 +9,9 @@ const { RADIOS, TENUES, VEHICLES } = require('./constants');
 
 /** Identifiants des champs des modals. */
 const FIELDS = {
-  date: 'date',
+  day: 'jour',
+  hour: 'heure',
+  minute: 'minute',
   tenue: 'tenue',
   radio: 'radio',
   vehicle: 'vehicule',
@@ -25,8 +27,6 @@ const FIELDS = {
   photo: 'photo',
 };
 
-const DATE_PLACEHOLDER = 'JJ/MM/AAAA HH:MM (ex : 31/10/2026 21:00)';
-
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 /**
@@ -39,23 +39,6 @@ function prefill(input, value) {
   if (value && value.length >= Math.max(min, 1) && value.length <= max) input.setValue(value);
   return input;
 }
-
-const dateLabel = (value) =>
-  new LabelBuilder()
-    .setLabel('Date & Heure')
-    .setDescription('Format : JJ/MM/AAAA HH:MM')
-    .setTextInputComponent(
-      prefill(
-        new TextInputBuilder()
-          .setCustomId(FIELDS.date)
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder(DATE_PLACEHOLDER)
-          .setMinLength(10)
-          .setMaxLength(20)
-          .setRequired(true),
-        value,
-      ),
-    );
 
 const vehicleOtherInput = (value, required) =>
   prefill(
@@ -85,42 +68,52 @@ const selectLabel = (label, customId, choices, placeholder, selected) =>
         ),
     );
 
-/**
- * Modal « Informations » de l'aperçu /atm, pré-rempli avec le brouillon.
- * La question « Choix du superviseur » n'apparaît que si `supervisors` est fourni
- * (créateur sans le rôle CO ATM).
- * @param {import('../models/AtmDraft')} draft
- * @param {{ label: string, value: string }[] | null} supervisors Superviseurs enregistrés en base.
- */
-function buildInfoModal(draft, supervisors) {
-  const modal = new ModalBuilder()
+/** Heures (00 à 23) et minutes (par 5 : un menu Discord est limité à 25 choix) du modal « date et heure ». */
+const HOUR_CHOICES = Array.from({ length: 24 }, (_, h) => ({ value: String(h).padStart(2, '0'), label: `${String(h).padStart(2, '0')} h` }));
+const MINUTE_CHOICES = Array.from({ length: 12 }, (_, i) => ({ value: String(i * 5).padStart(2, '0'), label: String(i * 5).padStart(2, '0') }));
+
+/** Modal « Informations générales » de l'aperçu /atm : tenue, radio, véhicule (et plaque si « Autre »). */
+function buildInfoModal(draft) {
+  return new ModalBuilder()
     .setCustomId(`atm:infosub:${draft._id}`)
-    .setTitle('Nouvelle session ATM')
+    .setTitle('Informations générales')
     .addLabelComponents(
-      dateLabel(draft.rawDate),
       selectLabel('Choix de la tenue', FIELDS.tenue, TENUES, 'Sélectionne la tenue', draft.tenue),
       selectLabel('Fréquence radio', FIELDS.radio, RADIOS, 'Sélectionne la fréquence radio', draft.radio),
       selectLabel('Choix du véhicule', FIELDS.vehicle, VEHICLES, 'Sélectionne le véhicule', draft.vehicle),
+      new LabelBuilder()
+        .setLabel('Plaque du véhicule (si « Autre »)')
+        .setDescription('À remplir uniquement si « Autre » est sélectionné ci-dessus.')
+        .setTextInputComponent(vehicleOtherInput(draft.plate, false)),
     );
-
-  if (supervisors) {
-    modal.addLabelComponents(
-      selectLabel('Choix du superviseur', FIELDS.supervisor, supervisors, 'Sélectionne le superviseur', draft.supervisorId),
-    );
-  }
-  return modal;
 }
 
-/** Modal « Choisir la plaque » (véhicule « Autre »). */
-function buildPlateModal(draft) {
+/**
+ * Modal « Choisir la date et l'heure » : date (aujourd'hui + 6 jours), heure, minutes.
+ * @param {{ value: string, label: string }[]} days Jours proposés (cf. getUpcomingDays).
+ * @param {{ day?: string, hour?: string, minute?: string }} selected Valeurs pré-sélectionnées.
+ */
+function buildDateModal(draft, days, selected = {}) {
   return new ModalBuilder()
-    .setCustomId(`atm:platesub:${draft._id}`)
-    .setTitle('Véhicule utilisé')
+    .setCustomId(`atm:datesub:${draft._id}`)
+    .setTitle("Date et heure de la session")
     .addLabelComponents(
-      new LabelBuilder()
-        .setLabel('Plaque du véhicule')
-        .setDescription('Renseigne la plaque du véhicule utilisé pour la session.')
-        .setTextInputComponent(vehicleOtherInput(draft.plate, true)),
+      selectLabel('Date', FIELDS.day, days, 'Sélectionne la date', selected.day),
+      selectLabel('Heure', FIELDS.hour, HOUR_CHOICES, "Sélectionne l'heure", selected.hour),
+      selectLabel('Minutes', FIELDS.minute, MINUTE_CHOICES, 'Sélectionne les minutes', selected.minute),
+    );
+}
+
+/**
+ * Modal « Sélectionner un superviseur ».
+ * @param {{ label: string, value: string }[]} supervisors Superviseurs enregistrés en base.
+ */
+function buildSupervisorChoiceModal(draft, supervisors) {
+  return new ModalBuilder()
+    .setCustomId(`atm:supsub:${draft._id}`)
+    .setTitle('Sélectionner un superviseur')
+    .addLabelComponents(
+      selectLabel('Choix du superviseur', FIELDS.supervisor, supervisors, 'Sélectionne le superviseur', draft.supervisorId),
     );
 }
 
@@ -163,7 +156,10 @@ module.exports = {
   prefill,
   selectLabel,
   vehicleOtherInput,
+  HOUR_CHOICES,
+  MINUTE_CHOICES,
   buildInfoModal,
-  buildPlateModal,
+  buildDateModal,
+  buildSupervisorChoiceModal,
   buildSupervisorModal,
 };

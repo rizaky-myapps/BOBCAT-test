@@ -32,7 +32,7 @@ const STATUS_LINES = {
  */
 function renderSupervisionRequest(draft, request) {
   const ts = toUnix(draft.scheduledAt);
-  const radio = RADIOS.find((item) => item.value === draft.radio)?.short ?? draft.radio;
+  const radio = RADIOS.find((item) => item.value === draft.radio)?.short ?? '...';
   const pending = request.status === 'pending';
 
   const text = [
@@ -42,7 +42,7 @@ function renderSupervisionRequest(draft, request) {
     `> **Date :** <t:${ts}:d>`,
     `> **Heure :** <t:${ts}:t> <t:${ts}:R>`,
     `> **Radio :** \`${radio}\``,
-    `> **Tenue :** \`${findLabel(TENUES, draft.tenue)}\``,
+    `> **Tenue :** \`${draft.tenue ? findLabel(TENUES, draft.tenue) : '...'}\``,
     `> **Véhicule :** \`${resolveVehicle(draft.vehicle, draft.plate) ?? '...'}\``,
     '',
     pending
@@ -172,9 +172,9 @@ function resolveRequest(draftId, requestId, status) {
 
 const CREATOR_NOTICES = {
   accepted: (id) => `✅ <@${id}> a validé sa présence. Tu peux envoyer la session.`,
-  refused: (id) => `❌ <@${id}> n'est pas disponible. Sélectionne un autre superviseur via « Informations ».`,
+  refused: (id) => `❌ <@${id}> n'est pas disponible. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
   expired: (id) =>
-    `⌛ <@${id}> n'a pas répondu dans les 10 minutes : demande refusée. Sélectionne un autre superviseur via « Informations ».`,
+    `⌛ <@${id}> n'a pas répondu dans les 10 minutes : demande refusée. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
 };
 
 /** Prévient le créateur de la réponse du superviseur. */
