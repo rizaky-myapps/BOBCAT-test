@@ -9,9 +9,19 @@ mongoose.set('strictQuery', true);
 async function connectDatabase(uri, dbName) {
   await mongoose.connect(uri, dbName ? { dbName } : {});
   console.log(`[MongoDB] Connecté à la base "${mongoose.connection.name}".`);
+  await renameCollection('PDS-ATM', 'Session-ATM-PDS');
 
   mongoose.connection.on('error', (error) => console.error('[MongoDB] Erreur :', error));
   mongoose.connection.on('disconnected', () => console.warn('[MongoDB] Déconnecté.'));
+}
+
+/** Renomme une collection existante (une seule fois : si l'ancienne existe et pas la nouvelle). */
+async function renameCollection(from, to) {
+  const names = (await mongoose.connection.db.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name);
+  if (names.includes(from) && !names.includes(to)) {
+    await mongoose.connection.db.renameCollection(from, to);
+    console.log(`[MongoDB] Collection "${from}" renommée en "${to}".`);
+  }
 }
 
 async function disconnectDatabase() {

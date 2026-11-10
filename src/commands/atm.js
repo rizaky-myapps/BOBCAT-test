@@ -10,7 +10,9 @@ const {
 } = require('discord.js');
 const AtmDraft = require('../models/AtmDraft');
 const { renderPreview } = require('../atm/preview');
-const { findTodaySessionsForUser, sessionUrl } = require('../atm/service');
+const { findProgrammedSessions, findTodaySessionsForUser, sessionUrl } = require('../atm/service');
+const { config } = require('../config');
+const { formatDateTime, toUnix } = require('../utils/date');
 const { rememberPreview } = require('../atm/supervision');
 const { separator } = require('../utils/v2');
 
@@ -28,29 +30,51 @@ async function showPreview(interaction) {
   rememberPreview(interaction, draft);
 }
 
-/** Message affiché quand le membre dirige ou participe déjà à une session aujourd'hui. */
-function renderAlreadyBusy(sessions) {
-  const lines = sessions.map(({ session, leads }) =>
-    leads
-      ? `🛡️ Tu diriges déjà une session aujourd'hui : ${sessionUrl(session)}`
-      : `👥 Tu participes déjà à une session aujourd'hui : ${sessionUrl(session)}`,
-  );
+/**
+ * Message affiché avant l'aperçu quand le membre a des sessions programmées (avec « Déprogrammer » et
+ * « Nouvelle session ») ou dirige / participe déjà à une session aujourd'hui (avec « Poster quand même »).
+ */
+function renderBeforePreview(programmed, today) {
+  const lines = [];
+  for (const session of programmed) {
+    const ts = toUnix(session.scheduledAt);
+    const publish = toUnix(session.publishAt);
+    lines.push(
+      `📅 Ta session programmée du <t:${ts}:d> à <t:${ts}:t> sera postée <t:${publish}:R> (à <t:${publish}:t>).`,
+    );
+  }
+  for (const { session, leads } of today) {
+    lines.push(
+      leads
+        ? `🛡️ Tu diriges déjà une session aujourd'hui : ${sessionUrl(session)}`
+        : `👥 Tu participes déjà à une session aujourd'hui : ${sessionUrl(session)}`,
+    );
+  }
   lines.push(
     '',
-    'Tu peux quand même en poster une nouvelle avec le bouton ci-dessous, à une heure qui ne chevauche pas tes sessions (une session dure environ 1h30).',
+    programmed.length
+      ? 'Tu peux déprogrammer une session (elle ne sera jamais postée) ou en programmer une nouvelle, à une heure qui ne chevauche pas tes sessions (une session dure environ 1h30).'
+      : 'Tu peux quand même en poster une nouvelle avec le bouton ci-dessous, à une heure qui ne chevauche pas tes sessions (une session dure environ 1h30).',
+  );
+
+  const buttons = programmed.slice(0, 4).map((session) =>
+    new ButtonBuilder()
+      .setCustomId(`atm:unprog:${session._id}`)
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('🗑️')
+      .setLabel(programmed.length > 1 ? `Déprogrammer (${formatDateTime(session.scheduledAt, config.timezone)})` : 'Déprogrammer'),
+  );
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId('atm:force')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('📨')
+      .setLabel(programmed.length ? 'Nouvelle session' : 'Poster quand même'),
   );
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n')))
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('atm:force')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('📨')
-          .setLabel('Poster quand même'),
-      ),
-    );
+    .addActionRowComponents(new ActionRowBuilder().addComponents(buttons));
 
   return {
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
@@ -67,11 +91,15 @@ module.exports = {
 
   /**
    * Envoie l'aperçu (éphémère) du message de session, configurable via ses boutons.
-   * Si le membre dirige ou participe déjà à une session aujourd'hui, il en est d'abord informé.
+   * Si le membre a des sessions programmées, ou dirige / participe déjà à une session aujourd'hui,
+   * il en est d'abord informé.
    */
   async execute(interaction) {
-    const sessions = await findTodaySessionsForUser(interaction.guildId, interaction.user.id);
-    if (sessions.length) return interaction.reply(renderAlreadyBusy(sessions));
+    const [programmed, today] = await Promise.all([
+      findProgrammedSessions(interaction.guildId, interaction.user.id),
+      findTodaySessionsForUser(interaction.guildId, interaction.user.id),
+    ]);
+    if (programmed.length || today.length) return interaction.reply(renderBeforePreview(programmed, today));
     return showPreview(interaction);
   },
 

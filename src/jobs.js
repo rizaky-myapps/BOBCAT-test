@@ -6,7 +6,8 @@ const {
   SUPERVISOR_ROLE_CHECK_INTERVAL,
   SESSION_CHECK_INTERVAL,
 } = require('./atm/constants');
-const { cancelUnstartedSessions } = require('./atm/lifecycle');
+const { cancelUnstartedSessions, moveClosedSessionsToBasket } = require('./atm/lifecycle');
+const { publishProgrammedSessions, sendProgramReminders } = require('./atm/programmed');
 const { checkDispatchDeadlines, sendDispatchReminders } = require('./atm/reminders');
 const { sendStartChecks } = require('./atm/startCheck');
 const { expirePendingRequests } = require('./atm/supervision');
@@ -33,9 +34,12 @@ function every(interval, name, task) {
  */
 function startJobs(client) {
   every(DRAFT_CLEANUP_INTERVAL, 'Brouillons', deleteExpiredDrafts);
+  every(DRAFT_CLEANUP_INTERVAL, 'Corbeille', moveClosedSessionsToBasket);
   every(SUPERVISOR_CHECK_INTERVAL, 'Supervision', () => expirePendingRequests(client));
   every(SUPERVISOR_ROLE_CHECK_INTERVAL, 'Superviseurs', () => checkSupervisorRoles(client));
   every(SESSION_CHECK_INTERVAL, 'Sessions', async () => {
+    await sendProgramReminders(client);
+    await publishProgrammedSessions(client);
     await checkDispatchDeadlines(client);
     await sendDispatchReminders(client);
     await sendStartChecks(client);

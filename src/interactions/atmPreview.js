@@ -2,7 +2,7 @@ const { isValidObjectId } = require('mongoose');
 const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
-const { RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
+const { PROGRAM_THRESHOLD, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
 const {
   FIELDS,
   HOUR_CHOICES,
@@ -22,12 +22,13 @@ const {
   getUsedResources,
   isVehicleUsed,
   isCoAtm,
+  programSession,
   publishSession,
   resolveVehicle,
   sessionUrl,
 } = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
-const { formatDateTime, getUpcomingDays, parseDateTime } = require('../utils/date');
+const { formatDateTime, getUpcomingDays, parseDateTime, toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
@@ -350,6 +351,18 @@ async function handleSendButton(interaction, [id]) {
 
   await interaction.deferUpdate();
   try {
+    // Prévue dans plus de 5h : programmée, elle sera postée automatiquement 1h45 avant son début.
+    if (claimed.scheduledAt.getTime() - Date.now() > PROGRAM_THRESHOLD) {
+      const session = await programSession(interaction, claimed);
+      const ts = toUnix(session.scheduledAt);
+      const publish = toUnix(session.publishAt);
+      await interaction.editReply(
+        textMessage(
+          `📅 **Session programmée** pour le <t:${ts}:d> à <t:${ts}:t>.\nElle sera postée automatiquement <t:${publish}:R> (à <t:${publish}:t>), 1h45 avant son début.`,
+        ),
+      );
+      return;
+    }
     const { message } = await publishSession(interaction, claimed);
     await interaction.editReply(textMessage(`✅ Session ATM publiée dans <#${message.channelId}> : ${message.url}`));
   } catch (error) {

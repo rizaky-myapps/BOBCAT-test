@@ -2,7 +2,7 @@ const { ContainerBuilder, MessageFlags, TextDisplayBuilder } = require('discord.
 const AtmSession = require('../models/AtmSession');
 const { CANCEL_NOT_STARTED, START_DEADLINE } = require('./constants');
 const { refreshSessionPds } = require('./pds');
-const { sessionUrl, syncSessionMessage } = require('./service');
+const { moveToBasket, sessionUrl, syncSessionMessage } = require('./service');
 const { closeStartCheck } = require('./startCheck');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
@@ -28,6 +28,7 @@ async function cancelSession(client, sessionId, { reason, details = null, by = n
     session,
     by ? `❌ **Session annulée** par <@${by}>.` : '⌛ **Session non commencée dans les 10 minutes : annulée.**',
   );
+  await moveToBasket(session);
   return session;
 }
 
@@ -56,7 +57,15 @@ async function finishSession(client, sessionId) {
 
   await syncSessionMessage(client, session);
   await refreshSessionPds(client, session);
+  await moveToBasket(session);
   return session;
+}
+
+/** Déplace dans la corbeille les sessions annulées ou terminées restées dans Sessions-ATM (ex : anciennes données). */
+async function moveClosedSessionsToBasket() {
+  for (const session of await AtmSession.find({ status: { $in: ['cancelled', 'done'] } })) {
+    await moveToBasket(session);
+  }
 }
 
 /** Prévient par un ping, dans le salon des sessions, les agents ayant voté pour une session annulée. */
@@ -101,4 +110,4 @@ async function cancelUnstartedSessions(client) {
   }
 }
 
-module.exports = { cancelSession, startSession, finishSession, cancelUnstartedSessions };
+module.exports = { cancelSession, startSession, finishSession, cancelUnstartedSessions, moveClosedSessionsToBasket };

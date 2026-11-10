@@ -1,11 +1,13 @@
 const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
+const AtmSessionBasket = require('../models/AtmSessionBasket');
 const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
 const {
   MAX_PLATE_LENGTH,
   MIN_DISPATCH,
   MIN_POST_DELAY,
+  PROGRAM_PUBLISH_BEFORE,
   RADIOS,
   SESSION_DURATION,
   VEHICLES,
@@ -124,6 +126,10 @@ async function findTodaySessionsForUser(guildId, userId, now = new Date()) {
 /** Agents à dispatcher au minimum pour pouvoir commencer (en plus du CO-ATM et du superviseur). */
 const getMinAgents = (session) => Math.max(0, MIN_DISPATCH - (session.supervisorId ? 2 : 1));
 
+/** Session qui occupe son créneau : programmée, ou postée et en attente / en cours. */
+const isActiveSession = (session) =>
+  session.status === 'scheduled' || (['pending', 'in_progress'].includes(session.status) && Boolean(session.messageId));
+
 /** Le membre est-il sur cette session ? (CO-ATM, dispatch ou vote « Je suis disponible ») */
 const isInvolved = (session, userId) =>
   session.creatorId === userId ||
@@ -141,11 +147,7 @@ async function findConflictingSessions(guildId, userId, scheduledAt, excludeId =
     scheduledAt: { $gt: new Date(time - SESSION_DURATION), $lt: new Date(time + SESSION_DURATION) },
   });
   return sessions.filter(
-    (session) =>
-      ['pending', 'in_progress'].includes(session.status) &&
-      session.messageId &&
-      String(session._id) !== String(excludeId) &&
-      isInvolved(session, userId),
+    (session) => isActiveSession(session) && String(session._id) !== String(excludeId) && isInvolved(session, userId),
   );
 }
 
@@ -181,12 +183,7 @@ async function getUsedResources(guildId, scheduledAt, excludeId = null) {
     guildId,
     scheduledAt: { $gt: new Date(time - SESSION_DURATION), $lt: new Date(time + SESSION_DURATION) },
   });
-  const active = sessions.filter(
-    (session) =>
-      ['pending', 'in_progress'].includes(session.status) &&
-      session.messageId &&
-      String(session._id) !== String(excludeId),
-  );
+  const active = sessions.filter((session) => isActiveSession(session) && String(session._id) !== String(excludeId));
   return {
     radios: new Set(active.map((session) => session.radio)),
     vehicles: new Set(active.map((session) => normalizeVehicle(session.vehicle))),
@@ -224,13 +221,12 @@ async function fetchAtmChannel(client) {
  * @param {import('discord.js').Interaction} interaction
  * @param {import('../models/AtmDraft')} draft
  */
-async function publishSession(interaction, draft) {
-  const channel = await fetchAtmChannel(interaction.client);
+/** Données d'une session à partir du brouillon de l'aperçu. */
+function sessionDataFromDraft(guild, draft) {
   const supervisorId = getConfirmedSupervisorId(draft);
-
-  const session = await AtmSession.create({
-    guildId: channel.guildId,
-    channelId: channel.id,
+  return {
+    guildId: guild.id,
+    channelId: config.channels.sessionAtm,
     creatorId: draft.userId,
     scheduledAt: draft.scheduledAt,
     tenue: draft.tenue,
@@ -238,13 +234,30 @@ async function publishSession(interaction, draft) {
     vehicle: resolveVehicle(draft.vehicle, draft.plate),
     supervisorId,
     pingMention: draft.ping ? getPingMention() : null,
-    dispatch: buildDispatch(interaction.guild, draft.userId, supervisorId),
-  });
+    dispatch: buildDispatch(guild, draft.userId, supervisorId),
+  };
+}
 
+/** Envoie le message de la session dans le salon des sessions ATM et enregistre son identifiant. */
+async function postSessionMessage(client, session) {
+  const channel = await fetchAtmChannel(client);
+  const message = await channel.send(renderSessionMessage(session));
+  session.channelId = channel.id;
+  session.messageId = message.id;
+  await session.save();
+  return message;
+}
+
+/**
+ * Crée la session en base à partir du brouillon de l'aperçu, puis publie le message dans le salon ATM.
+ * @param {import('discord.js').Interaction} interaction
+ * @param {import('../models/AtmDraft')} draft
+ */
+async function publishSession(interaction, draft) {
+  await fetchAtmChannel(interaction.client); // vérifie le salon avant de créer la session
+  const session = await AtmSession.create(sessionDataFromDraft(interaction.guild, draft));
   try {
-    const message = await channel.send(renderSessionMessage(session));
-    session.messageId = message.id;
-    await session.save();
+    const message = await postSessionMessage(interaction.client, session);
     return { session, message };
   } catch (error) {
     await session.deleteOne().catch(() => null);
@@ -252,9 +265,37 @@ async function publishSession(interaction, draft) {
   }
 }
 
+/**
+ * Programme une session prévue dans plus de 5h : elle est enregistrée (statut « Programmée ») et sera
+ * postée automatiquement 1h45 avant son heure de début.
+ */
+async function programSession(interaction, draft) {
+  return AtmSession.create({
+    ...sessionDataFromDraft(interaction.guild, draft),
+    status: 'scheduled',
+    publishAt: new Date(draft.scheduledAt.getTime() - PROGRAM_PUBLISH_BEFORE),
+  });
+}
+
+/** Sessions programmées (pas encore postées) d'un membre. */
+function findProgrammedSessions(guildId, userId) {
+  return AtmSession.find({ guildId, creatorId: userId, status: 'scheduled' }).sort({ scheduledAt: 1 });
+}
+
+/** Déplace une session annulée ou terminée dans la corbeille (collection Session-ATM-Basket). */
+async function moveToBasket(session) {
+  try {
+    await AtmSessionBasket.create({ ...session.toObject(), movedAt: new Date() });
+  } catch (error) {
+    if (error.code !== 11000) throw error; // déjà dans la corbeille
+  }
+  await AtmSession.deleteOne({ _id: session._id });
+}
+
+/** Session active, ou à défaut dans la corbeille (annulée / terminée). */
 async function findSession(id) {
   if (!isValidObjectId(id)) return null;
-  return AtmSession.findById(id);
+  return (await AtmSession.findById(id)) ?? AtmSessionBasket.findById(id);
 }
 
 /** Met à jour le message public d'une session après une modification. */
@@ -285,6 +326,10 @@ module.exports = {
   findTodaySessionsForUser,
   sessionUrl,
   publishSession,
+  postSessionMessage,
+  programSession,
+  findProgrammedSessions,
+  moveToBasket,
   findSession,
   syncSessionMessage,
 };

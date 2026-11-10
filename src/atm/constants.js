@@ -27,6 +27,7 @@ const VEHICLES = [
 
 /** Statuts d'une session (affichés dans « Informations »). */
 const STATUSES = [
+  { value: 'scheduled', label: 'Programmée', emoji: '📅' },
   { value: 'pending', label: 'En attente...', emoji: '⏳' },
   { value: 'in_progress', label: 'En cours...', emoji: '🚨' },
   { value: 'done', label: 'Terminée', emoji: '✅' },
@@ -107,6 +108,12 @@ const START_DEADLINE = 10 * MINUTE;
 const SESSION_CHECK_INTERVAL = MINUTE;
 /** Délai minimum entre la publication d'une session et son heure de début. */
 const MIN_POST_DELAY = 10 * MINUTE;
+/** Au-delà de ce délai avant son heure de début, une session est programmée au lieu d'être postée tout de suite. */
+const PROGRAM_THRESHOLD = 5 * 60 * MINUTE;
+/** Une session programmée est postée automatiquement 1h45 avant son heure de début. */
+const PROGRAM_PUBLISH_BEFORE = 105 * MINUTE;
+/** Rappel au CO-ATM (salon CO-ATM) d'une session programmée, avant qu'elle soit postée. */
+const PROGRAM_REMINDER_BEFORE_PUBLISH = 30 * MINUTE;
 /** Durée approximative d'une session : un membre ne peut pas être sur deux sessions qui se chevauchent. */
 const SESSION_DURATION = 90 * MINUTE;
 /** Délai avant l'heure prévue pour vérifier le dispatching (rappel au CO-ATM ou annulation faute d'agents). */
@@ -146,6 +153,9 @@ module.exports = {
   SESSION_CHECK_INTERVAL,
   SESSION_DURATION,
   MIN_POST_DELAY,
+  PROGRAM_THRESHOLD,
+  PROGRAM_PUBLISH_BEFORE,
+  PROGRAM_REMINDER_BEFORE_PUBLISH,
   DISPATCH_CHECK_BEFORE,
   DISPATCH_REMINDER_BEFORE,
   findLabel,

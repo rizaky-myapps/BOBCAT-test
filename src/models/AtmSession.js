@@ -33,6 +33,17 @@ const cancellationSchema = new Schema(
   { _id: false },
 );
 
+const programReminderSchema = new Schema(
+  {
+    channelId: { type: String, default: null },
+    messageId: { type: String, default: null },
+    sentAt: { type: Date, default: Date.now },
+    /** Le CO-ATM a confirmé qu'il veut toujours faire la session. */
+    confirmedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const startCheckSchema = new Schema(
   {
     channelId: { type: String, default: null },
@@ -60,6 +71,10 @@ const atmSessionSchema = new Schema(
     pingMention: { type: String, default: null },
 
     status: { type: String, enum: STATUSES.map((status) => status.value), default: 'pending' },
+    /** Session programmée : date à laquelle elle sera postée (1h45 avant son heure de début). */
+    publishAt: { type: Date, default: null },
+    /** Rappel envoyé au CO-ATM dans le salon CO-ATM avant la publication d'une session programmée. */
+    programReminder: { type: programReminderSchema, default: null },
     /** Agents ayant cliqué sur « Je suis disponible ». */
     available: [{ type: String }],
     /** Agents sur dispatch : n°1 le CO-ATM (créateur), n°2 le superviseur (s'il y en a un), puis les agents. */

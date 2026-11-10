@@ -4,7 +4,7 @@ const PdsAtm = require('../models/PdsAtm');
 const { MAX_MALLETTES } = require('../atm/constants');
 const { FIELDS, getUploadedFiles } = require('../atm/modals');
 const { renderPdsMessage, replacePdsImage } = require('../atm/pds');
-const { canManageSession } = require('../atm/service');
+const { canManageSession, findSession } = require('../atm/service');
 const { buildPdsEditModal } = require('../atm/sessionModals');
 const { ephemeralText } = require('../utils/v2');
 
@@ -14,7 +14,7 @@ const { ephemeralText } = require('../utils/v2');
  */
 async function loadEditablePds(interaction, id) {
   const pds = isValidObjectId(id) ? await PdsAtm.findById(id) : null;
-  const session = pds ? await AtmSession.findById(pds.sessionId) : null;
+  const session = pds ? await findSession(String(pds.sessionId)) : null;
 
   let error = null;
   if (!pds || !session) error = '❌ Cette PDS est introuvable.';

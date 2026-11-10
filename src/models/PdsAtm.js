@@ -27,4 +27,4 @@ const pdsAtmSchema = new Schema(
 
 pdsAtmSchema.index({ guildId: 1, dayKey: 1, number: 1 }, { unique: true });
 
-module.exports = model('PDS-ATM', pdsAtmSchema, 'PDS-ATM');
+module.exports = model('Session-ATM-PDS', pdsAtmSchema, 'Session-ATM-PDS');

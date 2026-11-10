@@ -3,6 +3,7 @@ const { showPreview } = require('../commands/atm');
 const preview = require('./atmPreview');
 const panel = require('./atmPanel');
 const { handlePdsEditButton, handlePdsEditModal } = require('./pds');
+const { handleProgramConfirmButton, handleUnprogramButton } = require('./programmed');
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
 const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
 const { ephemeralText } = require('../utils/v2');
@@ -21,6 +22,9 @@ const componentHandlers = {
   'atm:ping': preview.handlePingButton,
   'atm:send': preview.handleSendButton,
   'atm:force': showPreview,
+  // Sessions programmées
+  'atm:unprog': handleUnprogramButton,
+  'atm:progok': handleProgramConfirmButton,
   // Message public de la session
   'atm:dispo': handleAvailableButton,
   'atm:manage': handleManageButton,
