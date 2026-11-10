@@ -1,5 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
+const { config } = require('../config');
 const PdsAtm = require('../models/PdsAtm');
 const {
   CANCEL_OTHER,
@@ -35,6 +36,7 @@ const {
   getMinAgents,
   getPlateError,
   getUsedResources,
+  hasRole,
   isBiker,
   isVehicleUsed,
   resolveVehicle,
@@ -74,6 +76,19 @@ const memberName = (guild, userId) => {
   const member = guild.members.cache.get(userId);
   return truncate(member?.nickname ?? member?.displayName ?? userId, 100);
 };
+
+/**
+ * Libellé d'un agent dans les listes du dispatching : pseudo suivi de ses habilitations,
+ * ex : « Yvick Waler (U2R, Fusil à pompe) », « Yvick Waler (U2R) », « Yvick Waler (Fusil à pompe) ».
+ */
+function agentLabel(guild, userId) {
+  const member = guild.members.cache.get(userId);
+  const tags = [];
+  if (isBiker(member)) tags.push('U2R');
+  if (hasRole(member, config.roles.fusilAPompe)) tags.push('Fusil à pompe');
+  const suffix = tags.length ? ` (${tags.join(', ')})` : '';
+  return `${truncate(member?.nickname ?? member?.displayName ?? userId, 100 - suffix.length)}${suffix}`;
+}
 
 /* ------------------------------------------------------------------ */
 /* Annuler (panneau ⚙️ ou question du salon CO-ATM)                    */
@@ -161,7 +176,7 @@ async function handleDispatchButton(interaction, [id]) {
   if (!voters.length) {
     return interaction.reply(ephemeralText("❌ Aucun agent n'a voté « Je suis disponible » sur cette session."));
   }
-  const options = voters.map((userId) => ({ label: memberName(interaction.guild, userId), value: userId, default: false }));
+  const options = voters.map((userId) => ({ label: agentLabel(interaction.guild, userId), value: userId, default: false }));
   return interaction.showModal(buildDispatchModal(session, options, getAgentSlots(session)));
 }
 
@@ -312,7 +327,7 @@ async function handleReplacePickButton(interaction, [id]) {
     return continueWithGroup(interaction, session, kept, "ℹ️ Aucun autre agent disponible : pas de remplaçant.\n");
   }
 
-  const options = candidates.map((userId) => ({ label: memberName(interaction.guild, userId), value: userId }));
+  const options = candidates.map((userId) => ({ label: agentLabel(interaction.guild, userId), value: userId }));
   return interaction.showModal(buildReplacePickModal(session, options, max));
 }
 
