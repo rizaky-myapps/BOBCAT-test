@@ -79,14 +79,14 @@ const memberName = (guild, userId) => {
 
 /**
  * Libellé d'un agent dans les listes du dispatching : pseudo suivi de ses habilitations,
- * ex : « Yvick Waler (U2R, Fusil à pompe) », « Yvick Waler (U2R) », « Yvick Waler (Fusil à pompe) ».
+ * ex : « Yvick Waler 🏍️ 🔫 », « Yvick Waler 🏍️ », « Yvick Waler 🔫 » (🏍️ U2R, 🔫 fusil à pompe, toujours en dernier).
  */
 function agentLabel(guild, userId) {
   const member = guild.members.cache.get(userId);
   const tags = [];
-  if (isBiker(member)) tags.push('U2R');
-  if (hasRole(member, config.roles.fusilAPompe)) tags.push('Fusil à pompe');
-  const suffix = tags.length ? ` (${tags.join(', ')})` : '';
+  if (isBiker(member)) tags.push('🏍️');
+  if (hasRole(member, config.roles.fusilAPompe)) tags.push('🔫');
+  const suffix = tags.length ? ` ${tags.join(' ')}` : '';
   return `${truncate(member?.nickname ?? member?.displayName ?? userId, 100 - suffix.length)}${suffix}`;
 }
 
