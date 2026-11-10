@@ -136,7 +136,8 @@ function renderSessionMessage(session) {
   const closed = CLOSED_STATUSES.includes(session.status);
   const accentColor = session.status === 'cancelled' ? CANCELLED_ACCENT_COLOR : null;
 
-  // --- Bloc « Agent(s) disponible(s) » + bouton « Je suis disponible » (inutilisable après le dispatching) ---
+  // --- Bloc « Agent(s) disponible(s) » + bouton « Je suis disponible » (inutilisable après le dispatching
+  //     ou une fois la session commencée) ---
   const availableContainer = new ContainerBuilder();
   if (accentColor) availableContainer.setAccentColor(accentColor);
   availableContainer.addSectionComponents(
@@ -151,7 +152,7 @@ function renderSessionMessage(session) {
           .setCustomId(`atm:dispo:${id}`)
           .setStyle(ButtonStyle.Success)
           .setLabel('Je suis disponible')
-          .setDisabled(closed || Boolean(session.dispatchedAt)),
+          .setDisabled(closed || session.status === 'in_progress' || Boolean(session.dispatchedAt)),
       ),
   );
 

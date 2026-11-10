@@ -44,7 +44,7 @@ function buildCancelModal(session, source) {
  * @param {{ vehicleSeats: number, maxAgents: number }} slots
  */
 function buildDispatchModal(session, options, slots) {
-  const description = `Entre 1 et ${slots.maxAgents} : ${slots.vehicleSeats} dans le véhicule, le ${slots.maxAgents}e en moto (rôle Unité 2 roues).`;
+  const description = `Entre 1 et ${slots.maxAgents} : ${slots.vehicleSeats} dans le véhicule, le ${slots.maxAgents}e en U2R.`;
   return new ModalBuilder()
     .setCustomId(`atm:pdispatchsub:${session._id}`)
     .setTitle('Dispatching')
@@ -65,7 +65,7 @@ function buildDispatchModal(session, options, slots) {
 }
 
 /**
- * Modal « Dispatching » (2/2) : conducteur, et motard si un agent part en moto.
+ * Modal « Dispatching » (2/2) : conducteur, et U2R si un agent part en moto.
  * @param {{ label: string, value: string }[]} agents Agents sélectionnés.
  * @param {{ label: string, value: string }[] | null} bikers Agents pouvant être en moto (null : pas de moto).
  */
@@ -77,9 +77,60 @@ function buildDriverModal(session, agents, bikers) {
       selectLabel('Sélectionne le conducteur dans cette liste', FIELDS.driver, agents, 'Conducteur'),
     );
   if (bikers) {
-    modal.addLabelComponents(selectLabel('Sélectionne le motard dans cette liste', FIELDS.moto, bikers, 'Motard'));
+    modal.addLabelComponents(selectLabel("Sélectionne l'U2R dans cette liste", FIELDS.moto, bikers, 'U2R'));
   }
   return modal;
+}
+
+/**
+ * Modal « Dispatching » quand des agents sont déjà dispatchés : une raison par agent à remplacer
+ * (champ laissé vide = l'agent est gardé).
+ * @param {{ userId: string, name: string }[]} agents Agents dispatchés (hors CO-ATM et superviseur).
+ */
+function buildReplaceModal(session, agents) {
+  return new ModalBuilder()
+    .setCustomId(`atm:preplacesub:${session._id}`)
+    .setTitle('Remplacer des agents')
+    .addLabelComponents(
+      agents.map((agent) =>
+        new LabelBuilder()
+          .setLabel(truncate(`Remplacer ${agent.name}`, 45))
+          .setDescription('Raison du remplacement. Laisse vide pour garder cet agent.')
+          .setTextInputComponent(
+            new TextInputBuilder()
+              .setCustomId(`${FIELDS.replacePrefix}${agent.userId}`)
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Ex : plus disponible')
+              .setMaxLength(200)
+              .setRequired(false),
+          ),
+      ),
+    );
+}
+
+/**
+ * Modal « Choisir les remplaçants » : agents ayant voté, pas encore sur le dispatch.
+ * @param {{ label: string, value: string }[]} options
+ * @param {number} max Nombre maximum d'agents à ajouter.
+ */
+function buildReplacePickModal(session, options, max) {
+  return new ModalBuilder()
+    .setCustomId(`atm:preplacepicksub:${session._id}`)
+    .setTitle('Choisir les remplaçants')
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Remplaçants')
+        .setDescription(truncate(`Jusqu'à ${max} agent(s) ayant voté « Je suis disponible ». Peut rester vide.`, 100))
+        .setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId(FIELDS.replacements)
+            .setPlaceholder('Sélectionne les remplaçants')
+            .setRequired(false)
+            .setMinValues(0)
+            .setMaxValues(Math.min(max, options.length))
+            .addOptions(options),
+        ),
+    );
 }
 
 /** Modal « Informations » du panneau ⚙️ : radio, véhicule et tenue. */
@@ -142,6 +193,8 @@ module.exports = {
   buildCancelModal,
   buildDispatchModal,
   buildDriverModal,
+  buildReplaceModal,
+  buildReplacePickModal,
   buildSessionInfoModal,
   buildPdsModal,
   buildPdsEditModal,

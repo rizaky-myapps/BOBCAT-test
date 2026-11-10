@@ -16,6 +16,9 @@ async function handleAvailableButton(interaction, [id]) {
   if (CLOSED_STATUSES.includes(session.status)) {
     return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
   }
+  if (session.status === 'in_progress') {
+    return interaction.reply(ephemeralText('🔒 Cette session a déjà commencé.'));
+  }
   if (session.dispatchedAt) {
     return interaction.reply(ephemeralText('🔒 Le dispatching de cette session est déjà fait.'));
   }

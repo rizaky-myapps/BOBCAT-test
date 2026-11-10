@@ -22,7 +22,9 @@ const FIELDS = {
   cancelDetails: 'raison_autre',
   agents: 'agents',
   driver: 'conducteur',
-  moto: 'motard',
+  moto: 'u2r',
+  replacePrefix: 'remplacer_',
+  replacements: 'remplacants',
   mallettes: 'mallettes',
   photo: 'photo',
 };

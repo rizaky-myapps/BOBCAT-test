@@ -1,14 +1,26 @@
+const { MessageFlags } = require('discord.js');
 const AtmSession = require('../models/AtmSession');
-const { CANCEL_OTHER, CANCEL_REASONS, MAX_MALLETTES, MIN_DISPATCH, RADIOS, TENUES, VEHICLES } = require('../atm/constants');
+const {
+  CANCEL_OTHER,
+  CANCEL_REASONS,
+  CLOSED_STATUSES,
+  MAX_MALLETTES,
+  MIN_DISPATCH,
+  RADIOS,
+  TENUES,
+  VEHICLES,
+} = require('../atm/constants');
 const { cancelSession, finishSession, startSession } = require('../atm/lifecycle');
 const { FIELDS, getUploadedFiles, truncate } = require('../atm/modals');
-const { renderSessionPanel } = require('../atm/panel');
+const { renderConfirm, renderSessionPanel } = require('../atm/panel');
 const { createPds } = require('../atm/pds');
 const {
   buildCancelModal,
   buildDispatchModal,
   buildDriverModal,
   buildPdsModal,
+  buildReplaceModal,
+  buildReplacePickModal,
   buildSessionInfoModal,
 } = require('../atm/sessionModals');
 const {
@@ -64,10 +76,29 @@ const memberName = (guild, userId) => {
 async function handleCancelButton(interaction, [id, source = 'panel']) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
+  // Double vérification : dans le panneau, ou en message privé depuis la question du salon CO-ATM.
+  const confirm = renderConfirm(session, 'cancel', source);
+  if (source === 'panel') return interaction.update(confirm);
+  return interaction.reply({ ...confirm, flags: confirm.flags | MessageFlags.Ephemeral });
+}
+
+/** « Oui, annuler la session » : ouvre le modal de la raison. */
+async function handleCancelConfirm(interaction, [id, source = 'panel']) {
+  const session = await loadManageable(interaction, id, 'pending');
+  if (!session) return;
   return interaction.showModal(buildCancelModal(session, source));
 }
 
-async function handleCancelModal(interaction, [id, source = 'panel']) {
+/** « Retour » : abandonne l'annulation ou la fin de session. */
+async function handleBack(interaction, [id, source = 'panel']) {
+  if (source !== 'panel') return interaction.update(textMessage('↩️ Annulation abandonnée.'));
+  const session = await loadManageable(interaction, id);
+  if (!session) return;
+  if (CLOSED_STATUSES.includes(session.status)) return interaction.update(textMessage('🔒 Cette session est clôturée.'));
+  return interaction.update(renderSessionPanel(session));
+}
+
+async function handleCancelModal(interaction, [id]) {
   const [reason] = interaction.fields.getStringSelectValues(FIELDS.cancelReason);
   const details = interaction.fields.getTextInputValue(FIELDS.cancelDetails).trim() || null;
   if (!isIn(CANCEL_REASONS, reason)) return interaction.reply(ephemeralText('❌ Raison invalide.'));
@@ -87,10 +118,8 @@ async function handleCancelModal(interaction, [id, source = 'panel']) {
     by: interaction.user.id,
   });
   if (!cancelled) return interaction.followUp(ephemeralText(STATUS_ERRORS.pending));
-
-  // Depuis le panneau : il est remplacé. Depuis le salon CO-ATM : la question a été mise à jour.
-  if (source === 'panel') return interaction.editReply(textMessage('🛑 Session annulée.'));
-  return interaction.followUp(ephemeralText('🛑 Session annulée.'));
+  // Le message de confirmation (panneau ou message privé) est remplacé.
+  return interaction.editReply(textMessage('🛑 Session annulée.'));
 }
 
 /** Bouton « Maintenu » de la question du salon CO-ATM. */
@@ -115,43 +144,187 @@ async function handleDispatchButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
 
-  const onDispatch = new Set(getDispatchedAgents(session).map((agent) => agent.userId));
-  const voters = session.available
-    .filter((userId) => userId !== session.creatorId && userId !== session.supervisorId)
-    .slice(0, 25);
+  // Agents déjà dispatchés : remplacement (une raison par agent remplacé).
+  const dispatched = getDispatchedAgents(session);
+  if (dispatched.length) {
+    const agents = dispatched.map((agent) => ({ userId: agent.userId, name: memberName(interaction.guild, agent.userId) }));
+    return interaction.showModal(buildReplaceModal(session, agents));
+  }
+
+  const voters = getCandidates(session).slice(0, 25);
   if (!voters.length) {
     return interaction.reply(ephemeralText("❌ Aucun agent n'a voté « Je suis disponible » sur cette session."));
   }
-
-  const options = voters.map((userId) => ({
-    label: memberName(interaction.guild, userId),
-    value: userId,
-    default: onDispatch.has(userId),
-  }));
+  const options = voters.map((userId) => ({ label: memberName(interaction.guild, userId), value: userId, default: false }));
   return interaction.showModal(buildDispatchModal(session, options, getAgentSlots(session)));
+}
+
+/** Agents pouvant être ajoutés au dispatch : ont voté, ne sont pas sur le dispatch, ni en cours de remplacement. */
+function getCandidates(session) {
+  const excluded = new Set([
+    session.creatorId,
+    session.supervisorId,
+    ...session.dispatch.map((agent) => agent.userId),
+    ...(session.pendingReplacement?.agents ?? []).map((agent) => agent.userId),
+  ]);
+  return session.available.filter((userId) => !excluded.has(userId));
+}
+
+/** Vérifie le nombre d'agents et la règle de l'U2R (l'agent en plus du véhicule part en moto). */
+function checkAgentGroup(guild, session, group, { allowEmpty = false } = {}) {
+  const { vehicleSeats, maxAgents } = getAgentSlots(session);
+  if ((!group.length && !allowEmpty) || group.length > maxAgents) return `❌ Sélectionne entre 1 et ${maxAgents} agents.`;
+  if (group.length > vehicleSeats && !group.some((userId) => isBiker(guild.members.cache.get(userId)))) {
+    return `❌ Le ${maxAgents}e agent part en U2R : au moins un des agents doit être U2R.`;
+  }
+  return null;
+}
+
+/** Passe à l'étape du conducteur, ou termine directement le dispatching s'il n'y a plus d'agent. */
+async function continueWithGroup(interaction, session, group, intro) {
+  if (!group.length) return finalizeDispatch(interaction, session, []);
+  const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { pendingDispatch: group } }, AFTER);
+  return interaction.update(
+    renderSessionPanel(
+      updated,
+      `${intro}👥 Agents : ${group.map((userId) => `<@${userId}>`).join(', ')}.\nClique sur « Choisir le conducteur » pour terminer le dispatching.`,
+    ),
+  );
+}
+
+/**
+ * Enregistre le dispatch final. Les agents remplacés sont retirés de la session (dispatch et disponibles)
+ * et la raison de leur remplacement est conservée.
+ */
+async function finalizeDispatch(interaction, session, agents) {
+  const replaced = session.pendingReplacement?.agents ?? [];
+  const replacedIds = replaced.map((agent) => agent.userId);
+  const dispatch = buildDispatch(interaction.guild, session.creatorId, session.supervisorId, agents);
+
+  const update = {
+    $set: {
+      dispatch,
+      dispatchedAt: session.dispatchedAt ?? new Date(),
+      pendingDispatch: [],
+      pendingReplacement: null,
+      available: session.available.filter((userId) => !replacedIds.includes(userId)),
+    },
+  };
+  if (replaced.length) {
+    update.$set.replacements = [
+      ...session.replacements.map((entry) => entry.toObject?.() ?? entry),
+      ...replaced.map((agent) => ({ userId: agent.userId, reason: agent.reason, by: interaction.user.id, at: new Date() })),
+    ];
+  }
+
+  const updated = await AtmSession.findOneAndUpdate({ _id: session._id, status: 'pending' }, update, AFTER);
+  if (!updated) return interaction.update(renderSessionPanel(session, STATUS_ERRORS.pending));
+  await syncSessionMessage(interaction.client, updated);
+
+  const notice = ['✅ Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.'];
+  if (replaced.length) {
+    notice.push(...replaced.map((agent) => `🔄 <@${agent.userId}> retiré de la session : ${agent.reason}`));
+  }
+  return interaction.update(renderSessionPanel(updated, notice.join('\n')));
 }
 
 async function handleDispatchModal(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
 
-  const { vehicleSeats, maxAgents } = getAgentSlots(session);
-  const selected = interaction.fields.getStringSelectValues(FIELDS.agents).filter((userId) => session.available.includes(userId));
-
-  let error = null;
-  if (!selected.length || selected.length > maxAgents) error = `❌ Sélectionne entre 1 et ${maxAgents} agents.`;
-  else if (selected.length > vehicleSeats && !selected.some((userId) => isBiker(interaction.guild.members.cache.get(userId)))) {
-    error = `❌ Le ${maxAgents}e agent part en moto : au moins un des agents sélectionnés doit avoir le rôle Unité 2 roues.`;
-  }
+  const candidates = getCandidates(session);
+  const selected = interaction.fields.getStringSelectValues(FIELDS.agents).filter((userId) => candidates.includes(userId));
+  const error = checkAgentGroup(interaction.guild, session, selected);
   if (error) return interaction.update(renderSessionPanel(session, error));
+  return continueWithGroup(interaction, session, selected, '');
+}
 
-  const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { pendingDispatch: selected } }, AFTER);
+/* ------------------------------------------------------------------ */
+/* Remplacement d'agents déjà dispatchés                               */
+/* ------------------------------------------------------------------ */
+
+/** Modal des raisons : les agents dont la raison est remplie seront remplacés (retirés de la session). */
+async function handleReplaceModal(interaction, [id]) {
+  const session = await loadManageable(interaction, id, 'pending');
+  if (!session) return;
+
+  const dispatched = getDispatchedAgents(session);
+  const toReplace = dispatched
+    .map((agent) => {
+      const fieldId = `${FIELDS.replacePrefix}${agent.userId}`;
+      const reason = interaction.fields.fields.has(fieldId) ? interaction.fields.getTextInputValue(fieldId).trim() : '';
+      return { userId: agent.userId, reason };
+    })
+    .filter((agent) => agent.reason);
+
+  const freeSlots = getAgentSlots(session).maxAgents - dispatched.length;
+  if (!toReplace.length && freeSlots <= 0) {
+    return interaction.update(
+      renderSessionPanel(session, '❌ Indique la raison du remplacement pour au moins un agent (le dispatch est complet).'),
+    );
+  }
+
+  const updated = await AtmSession.findByIdAndUpdate(
+    session._id,
+    { $set: { pendingReplacement: { agents: toReplace }, pendingDispatch: [] } },
+    AFTER,
+  );
+  const lines = toReplace.map((agent) => `🔄 <@${agent.userId}> : ${agent.reason}`);
   return interaction.update(
     renderSessionPanel(
       updated,
-      `👥 Agents sélectionnés : ${selected.map((userId) => `<@${userId}>`).join(', ')}.\nClique sur « Choisir le conducteur » pour terminer le dispatching.`,
+      [
+        toReplace.length ? `**Agents à remplacer :**\n${lines.join('\n')}` : '**Aucun agent à remplacer.**',
+        'Clique sur « Choisir les remplaçants » pour continuer.',
+      ].join('\n'),
     ),
   );
+}
+
+/** Agents gardés lors d'un remplacement en cours. */
+function getKeptAgents(session) {
+  const replacedIds = (session.pendingReplacement?.agents ?? []).map((agent) => agent.userId);
+  return getDispatchedAgents(session)
+    .map((agent) => agent.userId)
+    .filter((userId) => !replacedIds.includes(userId));
+}
+
+async function handleReplacePickButton(interaction, [id]) {
+  const session = await loadManageable(interaction, id, 'pending');
+  if (!session) return;
+  if (!session.pendingReplacement) {
+    return interaction.reply(ephemeralText('❌ Remplacement expiré : recommence avec « Dispatching ».'));
+  }
+
+  const kept = getKeptAgents(session);
+  const max = getAgentSlots(session).maxAgents - kept.length;
+  const candidates = getCandidates(session).slice(0, 25);
+  // Personne d'autre n'a voté : les agents remplacés sont simplement retirés.
+  if (!candidates.length || max <= 0) {
+    const error = checkAgentGroup(interaction.guild, session, kept, { allowEmpty: true });
+    if (error) return interaction.update(renderSessionPanel(session, error));
+    return continueWithGroup(interaction, session, kept, "ℹ️ Aucun autre agent disponible : pas de remplaçant.\n");
+  }
+
+  const options = candidates.map((userId) => ({ label: memberName(interaction.guild, userId), value: userId }));
+  return interaction.showModal(buildReplacePickModal(session, options, max));
+}
+
+async function handleReplacePickModal(interaction, [id]) {
+  const session = await loadManageable(interaction, id, 'pending');
+  if (!session) return;
+  if (!session.pendingReplacement) {
+    return interaction.update(renderSessionPanel(session, '❌ Remplacement expiré : recommence avec « Dispatching ».'));
+  }
+
+  const candidates = getCandidates(session);
+  const picked = (interaction.fields.fields.get(FIELDS.replacements)?.values ?? []).filter((userId) =>
+    candidates.includes(userId),
+  );
+  const group = [...getKeptAgents(session), ...picked];
+  const error = checkAgentGroup(interaction.guild, session, group, { allowEmpty: true });
+  if (error) return interaction.update(renderSessionPanel(session, error));
+  return continueWithGroup(interaction, session, group, '');
 }
 
 /** Agents en attente de dispatching qui doivent être en moto (au-delà des places du véhicule). */
@@ -187,29 +360,18 @@ async function handleDriverModal(interaction, [id]) {
   if (!pending.length || !pending.includes(driverId)) error = '❌ Dispatching expiré : recommence avec « Dispatching ».';
   else if (needsBiker(session)) {
     if (!motoId || !pending.includes(motoId) || !isBiker(interaction.guild.members.cache.get(motoId))) {
-      error = '❌ Sélectionne un motard ayant le rôle Unité 2 roues.';
-    } else if (motoId === driverId) error = '❌ Le conducteur ne peut pas être le motard.';
+      error = '❌ Sélectionne un U2R.';
+    } else if (motoId === driverId) error = "❌ Le conducteur ne peut pas être l'U2R.";
   }
   if (error) return interaction.update(renderSessionPanel(session, error));
 
-  // Le motard est placé en dernier.
+  // L'U2R est placé en dernier.
   const agents = [...pending.filter((userId) => userId !== motoId), ...(motoId ? [motoId] : [])].map((userId) => ({
     userId,
     driver: userId === driverId,
     moto: userId === motoId,
   }));
-  const dispatch = buildDispatch(interaction.guild, session.creatorId, session.supervisorId, agents);
-
-  const updated = await AtmSession.findOneAndUpdate(
-    { _id: session._id, status: 'pending' },
-    { $set: { dispatch, dispatchedAt: new Date(), pendingDispatch: [] } },
-    AFTER,
-  );
-  if (!updated) return interaction.update(renderSessionPanel(session, STATUS_ERRORS.pending));
-  await syncSessionMessage(interaction.client, updated);
-  return interaction.update(
-    renderSessionPanel(updated, '✅ Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.'),
-  );
+  return finalizeDispatch(interaction, session, agents);
 }
 
 /* ------------------------------------------------------------------ */
@@ -266,6 +428,13 @@ async function handleStartButton(interaction, [id]) {
 async function handleFinishButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'in_progress');
   if (!session) return;
+  return interaction.update(renderConfirm(session, 'finish')); // double vérification
+}
+
+/** « Oui, terminer la session ». */
+async function handleFinishConfirm(interaction, [id]) {
+  const session = await loadManageable(interaction, id, 'in_progress');
+  if (!session) return;
 
   await interaction.deferUpdate();
   const finished = await finishSession(interaction.client, session._id);
@@ -314,16 +483,22 @@ async function handlePdsModal(interaction, [id]) {
 
 module.exports = {
   handleCancelButton,
+  handleCancelConfirm,
   handleCancelModal,
+  handleBack,
   handleKeepButton,
   handleDispatchButton,
   handleDispatchModal,
+  handleReplaceModal,
+  handleReplacePickButton,
+  handleReplacePickModal,
   handleDriverButton,
   handleDriverModal,
   handleInfoButton,
   handleInfoModal,
   handleStartButton,
   handleFinishButton,
+  handleFinishConfirm,
   handlePdsButton,
   handlePdsModal,
 };

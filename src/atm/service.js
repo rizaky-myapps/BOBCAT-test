@@ -89,14 +89,15 @@ function canManageSession(interaction, session) {
 }
 
 /**
- * Sessions (non annulées) prévues aujourd'hui que le membre dirige ou sur lesquelles il est au dispatch.
+ * Sessions (en attente ou en cours) prévues aujourd'hui que le membre dirige ou sur lesquelles il est au dispatch.
+ * Les sessions terminées ou annulées ne comptent pas.
  * @returns {Promise<{ session: object, leads: boolean }[]>}
  */
 async function findTodaySessionsForUser(guildId, userId, now = new Date()) {
   const { start, end } = getDayBounds(now, config.timezone);
   const sessions = await AtmSession.find({ guildId, scheduledAt: { $gte: start, $lt: end } });
   return sessions
-    .filter((session) => session.status !== 'cancelled' && session.messageId)
+    .filter((session) => ['pending', 'in_progress'].includes(session.status) && session.messageId)
     .filter((session) => dayKey(session.scheduledAt, config.timezone) === dayKey(now, config.timezone))
     .filter((session) => session.creatorId === userId || session.dispatch.some((agent) => agent.userId === userId))
     .map((session) => ({ session, leads: session.creatorId === userId }));

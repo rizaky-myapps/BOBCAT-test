@@ -10,6 +10,17 @@ const dispatchAgentSchema = new Schema(
   { _id: false },
 );
 
+const replacementSchema = new Schema(
+  {
+    userId: { type: String, required: true },
+    reason: { type: String, required: true },
+    /** Membre ayant fait le remplacement. */
+    by: { type: String, default: null },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const cancellationSchema = new Schema(
   {
     reason: { type: String, required: true },
@@ -57,6 +68,13 @@ const atmSessionSchema = new Schema(
     dispatchedAt: { type: Date, default: null },
     /** Agents choisis dans le 1er modal « Dispatching », en attente du choix du conducteur. */
     pendingDispatch: [{ type: String }],
+    /** Remplacement en cours : agents à retirer du dispatch, avec la raison (avant le choix des remplaçants). */
+    pendingReplacement: {
+      type: new Schema({ agents: [replacementSchema] }, { _id: false }),
+      default: null,
+    },
+    /** Historique des agents remplacés (retirés de la session). */
+    replacements: [replacementSchema],
 
     startedAt: { type: Date, default: null },
     endedAt: { type: Date, default: null },

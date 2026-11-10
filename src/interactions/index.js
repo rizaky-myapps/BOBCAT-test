@@ -26,9 +26,14 @@ const componentHandlers = {
   'atm:manage': handleManageButton,
   // Panneau ⚙️ (CO-ATM de la session et direction)
   'atm:pcancel': panel.handleCancelButton,
+  'atm:pcancelok': panel.handleCancelConfirm,
   'atm:pcancelsub': panel.handleCancelModal,
+  'atm:pback': panel.handleBack,
   'atm:pdispatch': panel.handleDispatchButton,
   'atm:pdispatchsub': panel.handleDispatchModal,
+  'atm:preplacesub': panel.handleReplaceModal,
+  'atm:preplace': panel.handleReplacePickButton,
+  'atm:preplacepicksub': panel.handleReplacePickModal,
   'atm:pdriver': panel.handleDriverButton,
   'atm:pdriversub': panel.handleDriverModal,
   'atm:pinfo': panel.handleInfoButton,
@@ -37,6 +42,7 @@ const componentHandlers = {
   'atm:ppds': panel.handlePdsButton,
   'atm:ppdssub': panel.handlePdsModal,
   'atm:pfinish': panel.handleFinishButton,
+  'atm:pfinishok': panel.handleFinishConfirm,
   // Question « session maintenue ? » (salon CO-ATM)
   'atm:keep': panel.handleKeepButton,
   // PDS ATM

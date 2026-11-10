@@ -77,7 +77,7 @@ const AGENT_ROLES = [
   { value: 'co_atm', emoji: '🧳', label: 'CO ATM (en cas du supervision)' },
   { value: 'pompe', emoji: '🔫', label: 'Fusil à pompe' },
   { value: 'conducteur', emoji: '🚙', label: 'Conducteur' },
-  { value: 'moto', emoji: '🏍️', label: 'Motard (Unité 2 roues)' },
+  { value: 'moto', emoji: '🏍️', label: 'U2R' },
   { value: 'nouveau', emoji: '🆕', label: "Besoin d'explication" },
 ];
 
