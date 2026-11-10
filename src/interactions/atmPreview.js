@@ -158,10 +158,18 @@ async function handleInfoModal(interaction, [id]) {
       ephemeralText('❌ Tu as choisi « Autre » : renseigne la plaque du véhicule. Aucune modification enregistrée.'),
     );
   }
-  if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle) || isVehicleUsed(used, resolveVehicle(vehicle, plate))) {
+  if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle)) {
     return interaction.reply(
       ephemeralText(
         '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là. Aucune modification enregistrée.',
+      ),
+    );
+  }
+  // « Autre » : la plaque saisie ne doit pas être celle d'un véhicule déjà utilisé à ce moment-là.
+  if (isVehicleUsed(used, resolveVehicle(vehicle, plate))) {
+    return interaction.reply(
+      ephemeralText(
+        `❌ La plaque \`${plate}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre. Aucune modification enregistrée.`,
       ),
     );
   }

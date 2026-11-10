@@ -409,8 +409,11 @@ async function handleInfoModal(interaction, [id]) {
   let error = null;
   if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = '❌ Réponses invalides.';
   else if (!vehicle) error = '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule.';
-  else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice) || isVehicleUsed(used, vehicle)) {
+  else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice)) {
     error = '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.';
+  } else if (isVehicleUsed(used, vehicle)) {
+    // « Autre » : la plaque saisie ne doit pas être celle d'un véhicule déjà utilisé à ce moment-là.
+    error = `❌ La plaque \`${vehicle}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.`;
   }
   if (error) return interaction.update(await renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
 
