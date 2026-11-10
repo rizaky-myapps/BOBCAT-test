@@ -61,7 +61,7 @@ async function finishSession(client, sessionId) {
   return session;
 }
 
-/** Déplace dans la corbeille les sessions annulées ou terminées restées dans Sessions-ATM (ex : anciennes données). */
+/** Déplace dans la corbeille les sessions annulées ou terminées restées dans Session-ATM (ex : anciennes données). */
 async function moveClosedSessionsToBasket() {
   for (const session of await AtmSession.find({ status: { $in: ['cancelled', 'done'] } })) {
     await moveToBasket(session);

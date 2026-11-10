@@ -104,4 +104,4 @@ const atmSessionSchema = new Schema(
   { timestamps: true },
 );
 
-module.exports = model('Sessions-ATM', atmSessionSchema, 'Sessions-ATM');
+module.exports = model('Session-ATM', atmSessionSchema, 'Session-ATM');

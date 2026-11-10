@@ -39,4 +39,4 @@ const atmDraftSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-module.exports = model('Sessions-ATM-Draft', atmDraftSchema, 'Sessions-ATM-Draft');
+module.exports = model('Session-ATM-Draft', atmDraftSchema, 'Session-ATM-Draft');

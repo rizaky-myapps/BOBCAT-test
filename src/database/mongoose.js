@@ -9,7 +9,10 @@ mongoose.set('strictQuery', true);
 async function connectDatabase(uri, dbName) {
   await mongoose.connect(uri, dbName ? { dbName } : {});
   console.log(`[MongoDB] Connecté à la base "${mongoose.connection.name}".`);
+  // Anciens noms des collections.
   await renameCollection('PDS-ATM', 'Session-ATM-PDS');
+  await renameCollection('Sessions-ATM', 'Session-ATM');
+  await renameCollection('Sessions-ATM-Draft', 'Session-ATM-Draft');
 
   mongoose.connection.on('error', (error) => console.error('[MongoDB] Erreur :', error));
   mongoose.connection.on('disconnected', () => console.warn('[MongoDB] Déconnecté.'));
