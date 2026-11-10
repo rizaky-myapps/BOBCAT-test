@@ -1,4 +1,5 @@
 const AtmSession = require('../models/AtmSession');
+const { config } = require('../config');
 const { CANCEL_NO_AGENTS, DISPATCH_CHECK_BEFORE, DISPATCH_REMINDER_BEFORE } = require('./constants');
 const { cancelSession } = require('./lifecycle');
 const { getMinAgents, sessionUrl } = require('./service');
@@ -80,7 +81,8 @@ async function checkDispatchDeadlines(client) {
 }
 
 /**
- * 15 min avant l'heure prévue : rappel (ping) à tout le dispatch, CO-ATM compris, dans le salon des sessions.
+ * 15 min avant l'heure prévue : rappel (ping) à tout le dispatch, CO-ATM compris, dans le salon RECHERCHE ATM
+ * (BOBCAT_RECHERCHE_ATM_CHANNEL_ID ; à défaut, dans le salon de la session).
  * Pas de rappel pour une session postée moins de 15 min avant son heure.
  */
 async function sendDispatchReminders(client) {
@@ -114,7 +116,7 @@ async function sendDispatchReminders(client) {
       ].join('\n'),
     );
     try {
-      const channel = await client.channels.fetch(session.channelId);
+      const channel = await client.channels.fetch(config.channels.rechercheAtm ?? session.channelId);
       await channel.send({ ...message, allowedMentions: { users: agents } });
     } catch (error) {
       console.error('[Sessions] Envoi du rappel impossible :', error);

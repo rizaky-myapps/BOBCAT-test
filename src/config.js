@@ -30,6 +30,7 @@ const config = {
   channels: {
     sessionAtm: env('BOBCAT_SESSION_ATM_CHANNEL_ID'),
     coAtm: env('BOBCAT_COATM_CHANNEL_ID'),
+    rechercheAtm: env('BOBCAT_RECHERCHE_ATM_CHANNEL_ID'),
     pdsAtm: env('BOBCAT_PDS_ATM_CHANNEL_ID'),
     pdsPatrouille: env('BOBCAT_PDS_PATROUILLE_CHANNEL_ID'),
     logs: env('BOBCAT_LOGS_CHANNEL_ID'),
