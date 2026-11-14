@@ -5,6 +5,7 @@ const { fetchRechercheChannel, moveToBasket, sessionLinkButton, syncSessionMessa
 const { closeStartCheck } = require('./startCheck');
 const { toUnix } = require('../utils/date');
 const { textMessage } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -20,6 +21,7 @@ async function cancelSession(client, sessionId, { reason, details = null, by = n
     AFTER,
   );
   if (!session) return null;
+  logAction('Session', `Session ${session._id} annulée ${by ? `par ${by}` : 'automatiquement'} (raison : ${reason}${details ? ` — ${details}` : ''})`);
 
   await syncSessionMessage(client, session);
   await closeStartCheck(
@@ -39,6 +41,7 @@ async function startSession(client, sessionId) {
     AFTER,
   );
   if (!session) return null;
+  logAction('Session', `Session ${session._id} commencée`);
 
   await syncSessionMessage(client, session);
   await closeStartCheck(client, session, '▶️ **Session commencée.**');
@@ -53,6 +56,7 @@ async function finishSession(client, sessionId) {
     AFTER,
   );
   if (!session) return null;
+  logAction('Session', `Session ${session._id} terminée`);
 
   await syncSessionMessage(client, session);
   await refreshSessionPds(client, session);
@@ -87,6 +91,7 @@ async function notifyVoters(client, session) {
       ...textMessage(text, { buttons: [sessionLinkButton(session)] }),
       allowedMentions: { users: session.available.slice(0, 100) },
     });
+    logAction('Rappel', `Annulation de la session ${session._id} signalée à ${session.available.length} agent(s) dans le salon RECHERCHE ATM`);
   } catch (error) {
     console.error('[Sessions] Envoi du ping d’annulation impossible :', error);
   }

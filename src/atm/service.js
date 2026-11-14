@@ -15,7 +15,8 @@ const {
   VEHICLE_CAPACITY,
   VEHICLE_OTHER,
 } = require('./constants');
-const { dayKey, getDayBounds, toUnix } = require('../utils/date');
+const { dayKey, formatDateTime, getDayBounds, toUnix } = require('../utils/date');
+const { logAction } = require('../utils/logger');
 
 /** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
 function resolveVehicle(value, plate) {
@@ -265,11 +266,14 @@ async function postSessionMessage(client, session) {
 async function publishSession(interaction, draft) {
   await fetchAtmChannel(interaction.client); // vérifie le salon avant de créer la session
   const session = await AtmSession.create(sessionDataFromDraft(interaction.guild, draft));
+  logAction('BDD', `Création dans Session-ATM : session ${session._id}`);
   try {
     const message = await postSessionMessage(interaction.client, session);
+    logAction('Session', `Session ${session._id} publiée par ${session.creatorId} (prévue le ${formatDateTime(session.scheduledAt, config.timezone)}) : ${message.url}`);
     return { session, message };
   } catch (error) {
     await session.deleteOne().catch(() => null);
+    logAction('BDD', `Suppression dans Session-ATM : session ${session._id} (publication impossible)`);
     throw error;
   }
 }
@@ -279,11 +283,17 @@ async function publishSession(interaction, draft) {
  * postée automatiquement 1h45 avant son heure de début.
  */
 async function programSession(interaction, draft) {
-  return AtmSession.create({
+  const session = await AtmSession.create({
     ...sessionDataFromDraft(interaction.guild, draft),
     status: 'scheduled',
     publishAt: new Date(draft.scheduledAt.getTime() - PROGRAM_PUBLISH_BEFORE),
   });
+  logAction('BDD', `Création dans Session-ATM : session ${session._id} (programmée)`);
+  logAction(
+    'Session',
+    `Session ${session._id} programmée par ${session.creatorId} (prévue le ${formatDateTime(session.scheduledAt, config.timezone)}, publication le ${formatDateTime(session.publishAt, config.timezone)})`,
+  );
+  return session;
 }
 
 /** Sessions programmées (pas encore postées) d'un membre. */
@@ -299,6 +309,7 @@ async function moveToBasket(session) {
     if (error.code !== 11000) throw error; // déjà dans la corbeille
   }
   await AtmSession.deleteOne({ _id: session._id });
+  logAction('BDD', `Session ${session._id} (${session.status}) déplacée de Session-ATM vers Session-ATM-Basket`);
 }
 
 /** Session active, ou à défaut dans la corbeille (annulée / terminée). */

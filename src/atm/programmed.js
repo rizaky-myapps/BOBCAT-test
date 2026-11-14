@@ -12,6 +12,7 @@ const { postSessionMessage } = require('./service');
 const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -89,6 +90,7 @@ async function sendProgramReminders(client) {
       await AtmSession.findByIdAndUpdate(session._id, {
         $set: { 'programReminder.channelId': channel.id, 'programReminder.messageId': message.id },
       });
+      logAction('Rappel', `Rappel de la session programmée ${session._id} envoyé à ${session.creatorId} dans le salon CO-ATM`);
     } catch (error) {
       console.error('[Programmation] Envoi du rappel impossible :', error);
     }
@@ -109,6 +111,7 @@ async function publishProgrammedSessions(client) {
     if (!session) continue;
     try {
       const message = await postSessionMessage(client, session);
+      logAction('Session', `Session programmée ${session._id} postée automatiquement : ${message.url}`);
       await closeProgramReminder(client, session, `📨 **Session postée :** ${message.url}`);
     } catch (error) {
       console.error('[Programmation] Publication impossible, nouvel essai plus tard :', error);
@@ -123,6 +126,10 @@ async function publishProgrammedSessions(client) {
  */
 async function unprogramSession(client, sessionId, userId) {
   const session = await AtmSession.findOneAndDelete({ _id: sessionId, status: 'scheduled', creatorId: userId });
+  if (session) {
+    logAction('BDD', `Suppression dans Session-ATM : session programmée ${session._id}`);
+    logAction('Session', `Session ${session._id} déprogrammée par ${userId} (ne sera jamais postée)`);
+  }
   if (session) await closeProgramReminder(client, session, '🗑️ **Session déprogrammée** : elle ne sera pas postée.');
   return session;
 }

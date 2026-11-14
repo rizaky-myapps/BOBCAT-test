@@ -30,6 +30,7 @@ const {
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
 const { formatDateTime, getUpcomingDays, parseDateTime, toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
 
@@ -348,6 +349,7 @@ async function handleSendButton(interaction, [id]) {
   // Suppression atomique : empêche un double envoi en cas de double clic.
   const claimed = await AtmDraft.findOneAndDelete({ _id: draft._id });
   if (!claimed) return interaction.deferUpdate();
+  logAction('BDD', `Suppression dans Session-ATM-Draft : brouillon ${claimed._id} (session postée ou programmée)`);
 
   await interaction.deferUpdate();
   try {
@@ -368,6 +370,7 @@ async function handleSendButton(interaction, [id]) {
   } catch (error) {
     console.error('[ATM] Publication impossible :', error);
     await AtmDraft.create(claimed.toObject()).catch(() => null);
+    logAction('BDD', `Création dans Session-ATM-Draft : brouillon ${claimed._id} restauré (publication impossible)`);
     await interaction.followUp(ephemeralText(`❌ Impossible de publier la session : ${error.message}`));
   }
 }

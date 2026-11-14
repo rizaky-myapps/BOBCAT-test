@@ -12,6 +12,7 @@ const { sessionLinkButton } = require('./service');
 const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -84,6 +85,7 @@ async function sendStartChecks(client) {
       await AtmSession.findByIdAndUpdate(session._id, {
         $set: { 'startCheck.channelId': channel.id, 'startCheck.messageId': message.id },
       });
+      logAction('Rappel', `Question « session maintenue ? » envoyée à ${session.creatorId} pour la session ${session._id}`);
     } catch (error) {
       console.error('[Sessions] Envoi de la question « session maintenue ? » impossible :', error);
       await AtmSession.findByIdAndUpdate(session._id, { $set: { startCheck: null } }); // nouvel essai plus tard

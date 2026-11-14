@@ -15,6 +15,7 @@ const { config } = require('../config');
 const { formatDateTime, toUnix } = require('../utils/date');
 const { rememberPreview } = require('../atm/supervision');
 const { separator } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 /**
  * Affiche l'aperçu de la session (brouillon réutilisé s'il existe), en réponse à la commande
@@ -22,7 +23,11 @@ const { separator } = require('../utils/v2');
  */
 async function showPreview(interaction) {
   const owner = { guildId: interaction.guildId, userId: interaction.user.id };
-  const draft = (await AtmDraft.findOne(owner).sort({ createdAt: -1 })) ?? (await AtmDraft.create(owner));
+  let draft = await AtmDraft.findOne(owner).sort({ createdAt: -1 });
+  if (!draft) {
+    draft = await AtmDraft.create(owner);
+    logAction('BDD', `Création dans Session-ATM-Draft : brouillon ${draft._id} pour ${interaction.user.id}`);
+  }
   const preview = renderPreview(draft, interaction.guild);
 
   if (interaction.isMessageComponent()) await interaction.update(preview);

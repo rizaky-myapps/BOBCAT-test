@@ -7,6 +7,7 @@ const { handleProgramConfirmButton, handleUnprogramButton } = require('./program
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
 const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
 const { ephemeralText } = require('../utils/v2');
+const { logInteraction } = require('../utils/logger');
 
 /**
  * Routage des composants / modals par préfixe de custom_id ("<namespace>:<action>:<arguments...>").
@@ -80,6 +81,7 @@ async function routeInteraction(interaction) {
 /** @param {import('discord.js').Interaction} interaction */
 async function handleInteraction(interaction) {
   try {
+    logInteraction(interaction);
     await routeInteraction(interaction);
   } catch (error) {
     console.error(`[Interaction] Erreur (${interaction.customId ?? interaction.commandName}) :`, error);

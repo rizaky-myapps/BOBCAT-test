@@ -14,6 +14,7 @@ const { renderPreview } = require('./preview');
 const { resolveVehicle } = require('./service');
 const { toUnix } = require('../utils/date');
 const { ephemeralText, separator } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 /* ------------------------------------------------------------------ */
 /* Message de demande dans le salon CO-ATM                             */
@@ -101,6 +102,7 @@ async function sendSupervisionRequest(client, draft) {
   };
   const message = await channel.send(renderSupervisionRequest(draft, request));
   request.messageId = message.id;
+  logAction('Supervision', `Demande envoyée à ${request.supervisorId} pour le brouillon ${draft._id} de ${draft.userId}`);
   return request;
 }
 
@@ -160,14 +162,17 @@ async function notifyCreator(client, draft, notice) {
  * En cas de refus ou d'absence de réponse, le superviseur est retiré du brouillon.
  * @returns {Promise<import('../models/AtmDraft')|null>} Le brouillon à jour, ou null si la demande n'était plus en attente.
  */
-function resolveRequest(draftId, requestId, status) {
+async function resolveRequest(draftId, requestId, status) {
   const update = { 'supervisorRequest.status': status };
   if (status !== 'accepted') update.supervisorId = null;
-  return AtmDraft.findOneAndUpdate(
+  const draft = await AtmDraft.findOneAndUpdate(
     { _id: draftId, 'supervisorRequest.id': requestId, 'supervisorRequest.status': 'pending' },
     { $set: update },
     { returnDocument: 'after' },
   );
+  const labels = { accepted: 'acceptée', refused: 'refusée', expired: 'expirée (pas de réponse en 10 min)' };
+  if (draft) logAction('Supervision', `Demande de ${draft.supervisorRequest.supervisorId} ${labels[status] ?? status} pour le brouillon ${draftId}`);
+  return draft;
 }
 
 const CREATOR_NOTICES = {

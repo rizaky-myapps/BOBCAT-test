@@ -2,6 +2,7 @@ const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
 const { renderProgramReminder, unprogramSession } = require('../atm/programmed');
 const { ephemeralText, textMessage } = require('../utils/v2');
+const { logAction, who } = require('../utils/logger');
 
 const NOT_PROGRAMMED = "ℹ️ Cette session n'est plus programmée (déjà postée ou déprogrammée).";
 
@@ -38,6 +39,7 @@ async function handleProgramConfirmButton(interaction, [id]) {
     { returnDocument: 'after' },
   );
   if (!updated) return interaction.reply(ephemeralText(NOT_PROGRAMMED));
+  logAction('Session', `Session programmée ${session._id} confirmée par ${who(interaction)}`);
   return interaction.update({ ...renderProgramReminder(updated), allowedMentions: { parse: [] } });
 }
 

@@ -5,6 +5,7 @@ const { fetchRechercheChannel, getMinAgents, sessionLinkButton } = require('./se
 const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { textMessage } = require('../utils/v2');
+const { logAction } = require('../utils/logger');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -21,6 +22,7 @@ async function pingCoAtmForDispatch(client, session) {
   );
   const channel = await fetchCoAtmChannel(client);
   await channel.send({ ...message, allowedMentions: { users: [session.creatorId] } });
+  logAction('Rappel', `CO-ATM ${session.creatorId} pingé pour faire le dispatch de la session ${session._id}`);
 }
 
 /** Message (sans mention) dans le salon CO-ATM : la session est annulée faute d'agents. */
@@ -36,6 +38,7 @@ async function notifyNoAgents(client, session) {
       { buttons: [sessionLinkButton(session)] },
     ),
   );
+  logAction('Rappel', `Annulation de la session ${session._id} (manque d'agents) signalée dans le salon CO-ATM`);
 }
 
 /**
@@ -117,6 +120,7 @@ async function sendDispatchReminders(client) {
     try {
       const channel = await fetchRechercheChannel(client, session);
       await channel.send({ ...message, allowedMentions: { users: agents } });
+      logAction('Rappel', `Rappel 15 min envoyé pour la session ${session._id} (${agents.length} agent(s))`);
     } catch (error) {
       console.error('[Sessions] Envoi du rappel impossible :', error);
     }

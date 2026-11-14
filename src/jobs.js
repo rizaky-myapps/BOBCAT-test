@@ -12,11 +12,12 @@ const { checkDispatchDeadlines, sendDispatchReminders } = require('./atm/reminde
 const { sendStartChecks } = require('./atm/startCheck');
 const { expirePendingRequests } = require('./atm/supervision');
 const { checkSupervisorRoles } = require('./atm/supervisorRoles');
+const { logAction } = require('./utils/logger');
 
 /** Supprime les brouillons non envoyés créés il y a plus de 5h. */
 async function deleteExpiredDrafts() {
   const { deletedCount } = await AtmDraft.deleteMany({ createdAt: { $lte: new Date(Date.now() - DRAFT_LIFETIME) } });
-  if (deletedCount) console.log(`[Brouillons] ${deletedCount} brouillon(s) expiré(s) supprimé(s).`);
+  if (deletedCount) logAction('BDD', `Suppression dans Session-ATM-Draft : ${deletedCount} brouillon(s) non envoyé(s) depuis 5h`);
 }
 
 /** Lance une tâche immédiatement puis à intervalle régulier, en journalisant ses erreurs. */

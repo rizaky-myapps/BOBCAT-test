@@ -7,6 +7,7 @@ const { deletePdsContent, renderPdsMessage, replacePdsImage } = require('../atm/
 const { canManageSession, findSession } = require('../atm/service');
 const { buildPdsEditModal } = require('../atm/sessionModals');
 const { ephemeralText, textMessage } = require('../utils/v2');
+const { logAction, who } = require('../utils/logger');
 
 /**
  * Charge la PDS et sa session ; seuls le CO-ATM de la session et la direction peuvent la modifier,
@@ -55,6 +56,7 @@ async function handlePdsEditModal(interaction, [id]) {
     if (attachment) await replacePdsImage(pds, attachment);
     pds.mallettes = mallettes;
     await pds.save();
+    logAction('PDS', `PDS n°${pds.number} modifiée par ${who(interaction)} (${mallettes} mallette(s)${attachment ? ', nouvelle photo' : ''})`);
   } catch (error) {
     console.error('[PDS] Modification impossible :', error);
     return interaction.followUp(ephemeralText(`❌ Impossible de modifier la PDS : ${error.message}`));
@@ -77,6 +79,7 @@ async function handlePdsDeleteButton(interaction, [id]) {
   const deleted = await PdsAtm.findOneAndDelete({ _id: pds._id });
   if (!deleted) return interaction.update(textMessage('ℹ️ Cette PDS a déjà été supprimée.'));
   await interaction.deferUpdate();
+  logAction('BDD', `Suppression dans Session-ATM-PDS : PDS ${deleted._id} (n°${deleted.number}) par ${who(interaction)}`);
   await deletePdsContent(interaction.client, deleted);
   return interaction.editReply(textMessage(`🗑️ PDS n°${String(deleted.number).padStart(2, '0')} supprimée.`));
 }

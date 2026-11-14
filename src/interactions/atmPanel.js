@@ -47,6 +47,7 @@ const { renderStartCheck } = require('../atm/startCheck');
 const { isCloudinaryEnabled } = require('../services/cloudinary');
 const { toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
+const { logAction, who } = require('../utils/logger');
 
 const AFTER = { returnDocument: 'after' };
 const isIn = (list, value) => list.some((item) => item.value === value);
@@ -156,6 +157,7 @@ async function handleKeepButton(interaction, [id]) {
     AFTER,
   );
   if (!updated) return interaction.reply(ephemeralText("ℹ️ Cette question n'est plus d'actualité."));
+  logAction('Session', `Session ${session._id} maintenue par ${who(interaction)}`);
   return interaction.update(renderStartCheck(updated));
 }
 
@@ -242,6 +244,12 @@ async function finalizeDispatch(interaction, session, agents) {
 
   const updated = await AtmSession.findOneAndUpdate({ _id: session._id, status: 'pending' }, update, AFTER);
   if (!updated) return interaction.update(await renderSessionPanel(session, STATUS_ERRORS.pending));
+  logAction(
+    'Session',
+    `Dispatch de la session ${session._id} mis à jour par ${who(interaction)} : ${dispatch.map((agent) => agent.userId).join(', ')}${
+      replaced.length ? ` — remplacés : ${replaced.map((agent) => `${agent.userId} (${agent.reason})`).join(', ')}` : ''
+    }`,
+  );
   await syncSessionMessage(interaction.client, updated);
 
   const notice = ['✅ Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.'];
@@ -438,6 +446,7 @@ async function handleInfoModal(interaction, [id]) {
   if (error) return interaction.update(await renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
 
   const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { radio, tenue, vehicle } }, AFTER);
+  logAction('Session', `Informations de la session ${session._id} modifiées par ${who(interaction)} : radio ${radio}, tenue ${tenue}, véhicule ${vehicle}`);
   await syncSessionMessage(interaction.client, updated);
   return interaction.update(await renderSessionPanel(updated, '✅ Informations de la session mises à jour.'));
 }

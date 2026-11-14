@@ -1,5 +1,6 @@
 const { v2: cloudinary } = require('cloudinary');
 const { config } = require('../config');
+const { logAction } = require('../utils/logger');
 
 const { cloudName, apiKey, apiSecret, folder: baseFolder } = config.cloudinary;
 const enabled = Boolean(cloudName && apiKey && apiSecret);
@@ -54,6 +55,7 @@ async function uploadImageFromUrl(url, subFolder, { squareCrop = false, cropRati
     stream.end(buffer);
   });
 
+  logAction('Cloudinary', `Image envoyée : ${result.public_id}`);
   return { url: result.secure_url, publicId: result.public_id };
 }
 
@@ -64,6 +66,7 @@ async function uploadImageFromUrl(url, subFolder, { squareCrop = false, cropRati
 async function deleteImage(publicId) {
   if (!enabled) return;
   await cloudinary.uploader.destroy(publicId, { resource_type: 'image', invalidate: true });
+  logAction('Cloudinary', `Image supprimée : ${publicId}`);
 }
 
 module.exports = { isCloudinaryEnabled, uploadImageFromUrl, deleteImage, squareCropTransformation };

@@ -7,6 +7,7 @@ const { connectDatabase, disconnectDatabase } = require('./database/mongoose');
 const { handleInteraction } = require('./interactions');
 const { deployCommands } = require('./commands/deploy');
 const { startJobs } = require('./jobs');
+const { logAction } = require('./utils/logger');
 
 // GuildMembers (intent privilégié) : nécessaire pour lister les membres ayant le rôle superviseur (/superviseur).
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
@@ -16,7 +17,7 @@ async function cacheGuildMembers(readyClient) {
   for (const guild of readyClient.guilds.cache.values()) {
     try {
       const members = await guild.members.fetch();
-      console.log(`[Discord] ${members.size} membre(s) chargé(s) pour « ${guild.name} ».`);
+      logAction('Discord', `${members.size} membre(s) chargé(s) pour « ${guild.name} »`);
     } catch (error) {
       console.error(`[Discord] Impossible de charger les membres de « ${guild.name} » :`, error);
     }
@@ -24,7 +25,7 @@ async function cacheGuildMembers(readyClient) {
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`[Discord] Connecté en tant que ${readyClient.user.tag}.`);
+  logAction('Discord', `Connecté en tant que ${readyClient.user.tag}`);
   await deployCommands(readyClient);
   await cacheGuildMembers(readyClient);
   startJobs(readyClient);
@@ -33,7 +34,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 client.on(Events.InteractionCreate, handleInteraction);
 
 async function shutdown(signal) {
-  console.log(`[Bot] ${signal} reçu, arrêt en cours…`);
+  logAction('Bot', `${signal} reçu, arrêt en cours…`);
   await client.destroy();
   await disconnectDatabase();
   process.exit(0);

@@ -6,6 +6,7 @@ const { FIELDS } = require('../atm/modals');
 const { findConflictingSessions, sessionUrl } = require('../atm/service');
 const { notifyResolution, renderSupervisionRequest, resolveRequest } = require('../atm/supervision');
 const { ephemeralText } = require('../utils/v2');
+const { logAction, who } = require('../utils/logger');
 
 /** Soumission du modal /superviseur : la sélection devient la liste des superviseurs en base. */
 async function handleSupervisorModal(interaction) {
@@ -17,7 +18,8 @@ async function handleSupervisorModal(interaction) {
     .map((userId) => guild.members.cache.get(userId))
     .filter((member) => member && (!roleId || member.roles.cache.has(roleId)));
 
-  await Supervisor.deleteMany({ guildId, userId: { $nin: members.map((member) => member.id) } });
+  const { deletedCount } = await Supervisor.deleteMany({ guildId, userId: { $nin: members.map((member) => member.id) } });
+  if (deletedCount) logAction('BDD', `Suppression dans Superviseur-List : ${deletedCount} superviseur(s) retiré(s) par ${who(interaction)}`);
   if (members.length) {
     await Supervisor.bulkWrite(
       members.map((member) => ({
@@ -29,6 +31,7 @@ async function handleSupervisorModal(interaction) {
       })),
     );
   }
+  logAction('Superviseurs', `Liste mise à jour par ${who(interaction)} : ${members.map((m) => `${m.displayName} (${m.id})`).join(', ') || 'vide'}`);
 
   return interaction.reply(
     ephemeralText(

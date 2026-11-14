@@ -3,6 +3,7 @@ const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
 const { SUPERVISOR_ROLE_GRACE } = require('./constants');
 const { sendLog } = require('../utils/logs');
+const { logAction } = require('../utils/logger');
 
 /** Membre du serveur, ou null s'il l'a quitté. Renvoie undefined si on ne peut pas savoir. */
 async function resolveMember(guild, userId) {
@@ -43,6 +44,7 @@ async function checkSupervisorRoles(client) {
 
     if (Date.now() - supervisor.roleLostAt.getTime() >= SUPERVISOR_ROLE_GRACE) {
       await Supervisor.deleteOne({ _id: supervisor._id });
+      logAction('BDD', `Suppression dans Superviseur-List : ${supervisor.userId} (rôle CO ATM perdu depuis 1h)`);
       const name = member?.displayName ?? supervisor.name;
       await sendLog(
         client,

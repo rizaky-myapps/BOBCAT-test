@@ -15,6 +15,7 @@ const { PDS_CROP_RATIO } = require('./constants');
 const { sessionUrl } = require('./service');
 const { deleteImage, uploadImageFromUrl } = require('../services/cloudinary');
 const { dayKey, formatDate } = require('../utils/date');
+const { logAction } = require('../utils/logger');
 
 /**
  * "[22] • Yvick Waler" à partir du surnom Discord ("[22] Yvick Waler", "22 | Yvick Waler",
@@ -140,9 +141,14 @@ async function createPds(interaction, session, { mallettes, attachment }) {
     pds.channelId = channel.id;
     pds.messageId = message.id;
     await pds.save();
+    logAction('BDD', `Création dans Session-ATM-PDS : PDS ${pds._id}`);
+    logAction('PDS', `PDS n°${pds.number} créée par ${interaction.user.id} (session ${session._id}, ${mallettes} mallette(s)) : ${message.url}`);
     return { pds, message };
   } catch (error) {
-    if (pds) await pds.deleteOne().catch(() => null);
+    if (pds) {
+      await pds.deleteOne().catch(() => null);
+      logAction('BDD', `Suppression dans Session-ATM-PDS : PDS ${pds._id} (envoi impossible)`);
+    }
     await deleteImage(image.publicId).catch(() => null);
     throw error;
   }
@@ -166,6 +172,7 @@ async function deletePdsContent(client, pds) {
     try {
       const channel = await client.channels.fetch(pds.channelId);
       await channel.messages.delete(pds.messageId);
+      logAction('PDS', `Message de la PDS n°${pds.number} supprimé (${pds.messageId})`);
     } catch (error) {
       console.error('[PDS] Suppression du message impossible :', error);
     }
