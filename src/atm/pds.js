@@ -118,7 +118,9 @@ async function createPds(interaction, session, { mallettes, attachment }) {
   let pds = null;
   try {
     for (let attempt = 0; !pds; attempt += 1) {
-      const number = (await PdsAtm.countDocuments({ guildId: session.guildId, dayKey: key })) + 1;
+      // Plus grand numéro du jour + 1 (pas le nombre de PDS : une PDS a pu être supprimée).
+      const sameDay = await PdsAtm.find({ guildId: session.guildId, dayKey: key });
+      const number = Math.max(0, ...sameDay.map((other) => other.number)) + 1;
       try {
         pds = await PdsAtm.create({
           guildId: session.guildId,
@@ -154,6 +156,22 @@ async function replacePdsImage(pds, attachment) {
   await deleteImage(previous).catch((error) => console.error('[Cloudinary] Suppression impossible :', error));
 }
 
+/**
+ * Supprime une PDS : sa photo sur Cloudinary et son message dans le salon des PDS
+ * (le document est supprimé de la base par l'appelant).
+ */
+async function deletePdsContent(client, pds) {
+  await deleteImage(pds.image.publicId).catch((error) => console.error('[Cloudinary] Suppression impossible :', error));
+  if (pds.channelId && pds.messageId) {
+    try {
+      const channel = await client.channels.fetch(pds.channelId);
+      await channel.messages.delete(pds.messageId);
+    } catch (error) {
+      console.error('[PDS] Suppression du message impossible :', error);
+    }
+  }
+}
+
 /** Met à jour les messages des PDS d'une session (ex : ✏️ désactivé quand la session est terminée). */
 async function refreshSessionPds(client, session) {
   for (const pds of await PdsAtm.find({ sessionId: session._id })) {
@@ -167,4 +185,4 @@ async function refreshSessionPds(client, session) {
   }
 }
 
-module.exports = { formatAgentName, renderPdsMessage, createPds, replacePdsImage, refreshSessionPds };
+module.exports = { formatAgentName, renderPdsMessage, createPds, replacePdsImage, refreshSessionPds, deletePdsContent };

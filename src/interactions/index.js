@@ -2,7 +2,7 @@ const commands = require('../commands');
 const { showPreview } = require('../commands/atm');
 const preview = require('./atmPreview');
 const panel = require('./atmPanel');
-const { handlePdsEditButton, handlePdsEditModal } = require('./pds');
+const { handlePdsDeleteButton, handlePdsDeleteCancel, handlePdsEditButton, handlePdsEditModal } = require('./pds');
 const { handleProgramConfirmButton, handleUnprogramButton } = require('./programmed');
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
 const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
@@ -53,6 +53,8 @@ const componentHandlers = {
   // PDS ATM
   'pds:edit': handlePdsEditButton,
   'pds:editsub': handlePdsEditModal,
+  'pds:del': handlePdsDeleteButton,
+  'pds:delno': handlePdsDeleteCancel,
   // /superviseur
   'sup:save': handleSupervisorModal,
   // Demande de supervision (salon CO-ATM)
@@ -63,7 +65,7 @@ const componentHandlers = {
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));
 
 async function routeInteraction(interaction) {
-  if (interaction.isChatInputCommand()) {
+  if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
     const command = commandMap.get(interaction.commandName);
     return command?.execute(interaction);
   }

@@ -3,10 +3,10 @@ const AtmSession = require('../models/AtmSession');
 const PdsAtm = require('../models/PdsAtm');
 const { MAX_MALLETTES } = require('../atm/constants');
 const { FIELDS, getUploadedFiles } = require('../atm/modals');
-const { renderPdsMessage, replacePdsImage } = require('../atm/pds');
+const { deletePdsContent, renderPdsMessage, replacePdsImage } = require('../atm/pds');
 const { canManageSession, findSession } = require('../atm/service');
 const { buildPdsEditModal } = require('../atm/sessionModals');
-const { ephemeralText } = require('../utils/v2');
+const { ephemeralText, textMessage } = require('../utils/v2');
 
 /**
  * Charge la PDS et sa session ; seuls le CO-ATM de la session et la direction peuvent la modifier,
@@ -64,4 +64,26 @@ async function handlePdsEditModal(interaction, [id]) {
   return interaction.followUp(ephemeralText('✅ PDS modifiée.'));
 }
 
-module.exports = { handlePdsEditButton, handlePdsEditModal };
+/** « Oui, supprimer la PDS » (menu contextuel « Supprimer la PDS ») : base de données, photo et message. */
+async function handlePdsDeleteButton(interaction, [id]) {
+  const pds = isValidObjectId(id) ? await PdsAtm.findById(id) : null;
+  if (!pds) return interaction.update(textMessage('ℹ️ Cette PDS a déjà été supprimée.'));
+  const session = await findSession(String(pds.sessionId));
+  if (session && !canManageSession(interaction, session)) {
+    return interaction.reply(ephemeralText('⛔ Seuls le CO-ATM de la session et la direction peuvent supprimer cette PDS.'));
+  }
+
+  // Suppression atomique en base (évite une double suppression), puis photo et message.
+  const deleted = await PdsAtm.findOneAndDelete({ _id: pds._id });
+  if (!deleted) return interaction.update(textMessage('ℹ️ Cette PDS a déjà été supprimée.'));
+  await interaction.deferUpdate();
+  await deletePdsContent(interaction.client, deleted);
+  return interaction.editReply(textMessage(`🗑️ PDS n°${String(deleted.number).padStart(2, '0')} supprimée.`));
+}
+
+/** « Annuler » : la PDS n'est pas supprimée. */
+async function handlePdsDeleteCancel(interaction) {
+  return interaction.update(textMessage('↩️ Suppression annulée.'));
+}
+
+module.exports = { handlePdsEditButton, handlePdsEditModal, handlePdsDeleteButton, handlePdsDeleteCancel };

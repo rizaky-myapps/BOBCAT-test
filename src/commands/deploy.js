@@ -15,7 +15,7 @@ async function deployCommands(client) {
   try {
     const registered = await client.application.commands.set(body, guildId ?? undefined);
     console.log(
-      `[Commandes] ${registered.size} commande(s) enregistrée(s) ${guildId ? `sur le serveur ${guildId}` : 'globalement'} : ${registered.map((c) => `/${c.name}`).join(', ')}`,
+      `[Commandes] ${registered.size} commande(s) enregistrée(s) ${guildId ? `sur le serveur ${guildId}` : 'globalement'} : ${registered.map((c) => (c.type === 1 ? `/${c.name}` : `« ${c.name} »`)).join(', ')}`,
     );
   } catch (error) {
     console.error(
