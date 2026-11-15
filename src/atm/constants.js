@@ -109,7 +109,7 @@ const START_EARLY_WINDOW = 10 * MINUTE;
 const START_DEADLINE = 10 * MINUTE;
 /** Fréquence de vérification des sessions non commencées. */
 const SESSION_CHECK_INTERVAL = MINUTE;
-/** Délai minimum entre la publication d'une session et son heure de début. */
+/** En dessous de ce délai avant son heure de début, poster une session demande une confirmation. */
 const MIN_POST_DELAY = 10 * MINUTE;
 /** Au-delà de ce délai avant son heure de début, une session est programmée au lieu d'être postée tout de suite. */
 const PROGRAM_THRESHOLD = 5 * 60 * MINUTE;

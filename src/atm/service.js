@@ -7,7 +7,6 @@ const { renderSessionMessage } = require('./message');
 const {
   MAX_PLATE_LENGTH,
   MIN_DISPATCH,
-  MIN_POST_DELAY,
   PROGRAM_PUBLISH_BEFORE,
   RADIOS,
   SESSION_DURATION,
@@ -15,7 +14,7 @@ const {
   VEHICLE_CAPACITY,
   VEHICLE_OTHER,
 } = require('./constants');
-const { dayKey, formatDateTime, getDayBounds, toUnix } = require('../utils/date');
+const { dayKey, formatDateTime, getDayBounds } = require('../utils/date');
 const { logAction } = require('../utils/logger');
 const EMOJI = require('../emoji');
 
@@ -155,14 +154,13 @@ async function findConflictingSessions(guildId, userId, scheduledAt, excludeId =
 }
 
 /**
- * Vérifie la date d'une nouvelle session : au moins 10 minutes après maintenant (il est 7h00 → 7h10 au plus tôt),
- * et pas pendant une autre session du créateur (il peut en prévoir une plus tard).
+ * Vérifie la date d'une nouvelle session : pas déjà passée, et pas pendant une autre session du créateur
+ * (il peut en prévoir une plus tard). Moins de 10 minutes avant : une confirmation est demandée à l'envoi.
  * @returns {Promise<string|null>} Le message d'erreur, ou null si la date convient.
  */
 async function checkSessionDate(guildId, userId, scheduledAt) {
-  const earliest = Math.floor(Date.now() / 60_000) * 60_000 + MIN_POST_DELAY;
-  if (scheduledAt.getTime() < earliest) {
-    return `${EMOJI.ERREUR} Une session doit être postée au moins 10 minutes avant son heure de début : choisis <t:${toUnix(new Date(earliest))}:t> ou plus tard.`;
+  if (scheduledAt.getTime() <= Date.now()) {
+    return `${EMOJI.ERREUR} Cette heure est déjà passée : choisis une heure à venir.`;
   }
   const [conflict] = await findConflictingSessions(guildId, userId, scheduledAt);
   if (conflict) {

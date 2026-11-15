@@ -9,9 +9,6 @@ const { MAX_PLATE_LENGTH, TENUES } = require('./constants');
 
 /** Identifiants des champs des modals. */
 const FIELDS = {
-  day: 'jour',
-  hour: 'heure',
-  minute: 'minute',
   tenue: 'tenue',
   radio: 'radio',
   vehicle: 'vehicule',
@@ -70,10 +67,6 @@ const selectLabel = (label, customId, choices, placeholder, selected) =>
         ),
     );
 
-/** Heures (00 à 23) et minutes (par 5 : un menu Discord est limité à 25 choix) du modal « date et heure ». */
-const HOUR_CHOICES = Array.from({ length: 24 }, (_, h) => ({ value: String(h).padStart(2, '0'), label: `${String(h).padStart(2, '0')} h` }));
-const MINUTE_CHOICES = Array.from({ length: 12 }, (_, i) => ({ value: String(i * 5).padStart(2, '0'), label: String(i * 5).padStart(2, '0') }));
-
 /**
  * Modal « Informations générales » de l'aperçu /atm : tenue, radio, véhicule (et plaque si « Autre »).
  * @param {{ radios: object[], vehicles: object[] }} choices Radios et véhicules encore disponibles à cette heure-là.
@@ -90,22 +83,6 @@ function buildInfoModal(draft, choices) {
         .setLabel('Plaque du véhicule (si « Autre »)')
         .setDescription('Uniquement si « Autre » est sélectionné : 8 caractères max (lettres, chiffres, espaces).')
         .setTextInputComponent(vehicleOtherInput(draft.plate, false)),
-    );
-}
-
-/**
- * Modal « Choisir la date et l'heure » : date (aujourd'hui + 6 jours), heure, minutes.
- * @param {{ value: string, label: string }[]} days Jours proposés (cf. getUpcomingDays).
- * @param {{ day?: string, hour?: string, minute?: string }} selected Valeurs pré-sélectionnées.
- */
-function buildDateModal(draft, days, selected = {}) {
-  return new ModalBuilder()
-    .setCustomId(`atm:datesub:${draft._id}`)
-    .setTitle("Date et heure de la session")
-    .addLabelComponents(
-      selectLabel('Date', FIELDS.day, days, 'Sélectionne la date', selected.day),
-      selectLabel('Heure', FIELDS.hour, HOUR_CHOICES, "Sélectionne l'heure", selected.hour),
-      selectLabel('Minutes', FIELDS.minute, MINUTE_CHOICES, 'Sélectionne les minutes', selected.minute),
     );
 }
 
@@ -161,10 +138,7 @@ module.exports = {
   prefill,
   selectLabel,
   vehicleOtherInput,
-  HOUR_CHOICES,
-  MINUTE_CHOICES,
   buildInfoModal,
-  buildDateModal,
   buildSupervisorChoiceModal,
   buildSupervisorModal,
 };

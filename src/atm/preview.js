@@ -7,7 +7,9 @@ const {
   needsSupervisor,
   resolveVehicle,
 } = require('./service');
-const { separator } = require('../utils/v2');
+const { buildDatePickerRows } = require('./datePicker');
+const { toUnix } = require('../utils/date');
+const { separator, textMessage } = require('../utils/v2');
 const EMOJI = require('../emoji');
 
 /** Une demande de supervision attend-elle la réponse du superviseur ? */
@@ -29,8 +31,10 @@ function isDraftComplete(draft, guild) {
  * La liste des agents disponibles est remplacée par les boutons de configuration.
  * @param {import('../models/AtmDraft')} draft
  * @param {import('discord.js').Guild} guild Serveur (rôles du créateur et logos des agents)
+ * @param {{ picker?: { day?: string, hour?: string, minute?: string } }} [options]
+ *   picker : les boutons sont remplacés par le choix de la date et de l'heure (choix déjà faits).
  */
-function renderPreview(draft, guild) {
+function renderPreview(draft, guild, { picker } = {}) {
   const id = draft._id.toString();
   const supervisorId = needsSupervisor(guild, draft) ? draft.supervisorId : null;
   const locked = isRequestPending(draft);
@@ -79,7 +83,7 @@ function renderPreview(draft, guild) {
     ),
   );
 
-  const actions = new ContainerBuilder().addActionRowComponents(rows);
+  const actions = new ContainerBuilder().addActionRowComponents(picker ? buildDatePickerRows(id, picker) : rows);
 
   return {
     flags: MessageFlags.IsComponentsV2,
@@ -88,4 +92,15 @@ function renderPreview(draft, guild) {
   };
 }
 
-module.exports = { renderPreview, isDraftComplete, isRequestPending };
+/** Confirmation avant de poster une session qui commence dans moins de 10 minutes. */
+function renderSendConfirm(draft) {
+  const id = draft._id.toString();
+  return textMessage(`Tu es sûr que tu veux faire une session <t:${toUnix(draft.scheduledAt)}:R> ?`, {
+    buttons: [
+      new ButtonBuilder().setCustomId(`atm:sendok:${id}`).setStyle(ButtonStyle.Success).setLabel("Oui, j'en suis sûr !"),
+      new ButtonBuilder().setCustomId(`atm:date:${id}`).setStyle(ButtonStyle.Secondary).setLabel("Non, changer la date et l'heure"),
+    ],
+  });
+}
+
+module.exports = { renderPreview, renderSendConfirm, isDraftComplete, isRequestPending };

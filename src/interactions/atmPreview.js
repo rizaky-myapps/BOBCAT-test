@@ -2,17 +2,10 @@ const { isValidObjectId } = require('mongoose');
 const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
-const { PROGRAM_THRESHOLD, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
-const {
-  FIELDS,
-  HOUR_CHOICES,
-  MINUTE_CHOICES,
-  buildDateModal,
-  buildInfoModal,
-  buildSupervisorChoiceModal,
-  truncate,
-} = require('../atm/modals');
-const { isDraftComplete, isRequestPending, renderPreview } = require('../atm/preview');
+const { MIN_POST_DELAY, PROGRAM_THRESHOLD, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
+const { FIELDS, buildInfoModal, buildSupervisorChoiceModal, truncate } = require('../atm/modals');
+const { getPickerState, isSlotAvailable, toSlot } = require('../atm/datePicker');
+const { isDraftComplete, isRequestPending, renderPreview, renderSendConfirm } = require('../atm/preview');
 const {
   checkSessionDate,
   findConflictingSessions,
@@ -28,7 +21,7 @@ const {
   sessionUrl,
 } = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
-const { formatDateTime, getUpcomingDays, parseDateTime, toUnix } = require('../utils/date');
+const { toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
 const EMOJI = require('../emoji');
@@ -181,53 +174,85 @@ async function handleInfoModal(interaction, [id]) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Bouton « Choisir la date et l'heure »                               */
+/* Bouton « Choisir la date et l'heure » : listes Date → Heure → Minutes */
 /* ------------------------------------------------------------------ */
 
-async function handleDateButton(interaction, [id]) {
-  const draft = await loadDraft(interaction, id);
-  if (!draft) return;
-  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
-
-  const days = getUpcomingDays(new Date(), config.timezone);
-  const selected = {};
-  if (draft.scheduledAt) {
-    const [date, time] = formatDateTime(draft.scheduledAt, config.timezone).split(' ');
-    const [dd, mm, yyyy] = date.split('/');
-    const [hour, minute] = time.split(':');
-    Object.assign(selected, { day: `${yyyy}-${mm}-${dd}`, hour, minute });
-  }
-  return interaction.showModal(buildDateModal(draft, days, selected));
+/** Affiche l'aperçu avec le choix de la date et de l'heure (seuls les horaires à venir sont proposés). */
+async function showDatePicker(interaction, draft, state) {
+  await interaction.update(renderPreview(draft, interaction.guild, { picker: state }));
+  rememberPreview(interaction, draft);
 }
 
-async function handleDateModal(interaction, [id]) {
+/** Brouillon modifiable par le créateur (pas de demande de supervision en attente), sinon null. */
+async function loadEditableDraft(interaction, id) {
+  const draft = await loadDraft(interaction, id);
+  if (!draft) return null;
+  if (isRequestPending(draft)) {
+    await interaction.reply(ephemeralText(LOCKED_MESSAGE));
+    return null;
+  }
+  return draft;
+}
+
+/** Bouton « Choisir la date et l'heure » (et « Non, changer la date et l'heure ») : la date actuelle est pré-sélectionnée. */
+async function handleDateButton(interaction, [id]) {
+  const draft = await loadEditableDraft(interaction, id);
+  if (!draft) return;
+  return showDatePicker(interaction, draft, getPickerState(draft));
+}
+
+/** Liste Date : la liste Heure apparaît. */
+async function handleDayPick(interaction, [id]) {
+  const draft = await loadEditableDraft(interaction, id);
+  if (!draft) return;
+  const [day] = interaction.values;
+  return showDatePicker(interaction, draft, { day });
+}
+
+/** Liste Heure : la liste Minutes apparaît. */
+async function handleHourPick(interaction, [id, day]) {
+  const draft = await loadEditableDraft(interaction, id);
+  if (!draft) return;
+  const [hour] = interaction.values;
+  return showDatePicker(interaction, draft, { day, hour });
+}
+
+/** Bouton « Retour » : l'aperçu revient sans changement. */
+async function handlePickBack(interaction, [id]) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
-  if (isRequestPending(draft)) return interaction.reply(ephemeralText(LOCKED_MESSAGE));
+  return updatePreview(interaction, draft);
+}
 
-  const { fields } = interaction;
-  const [day] = fields.getStringSelectValues(FIELDS.day);
-  const [hour] = fields.getStringSelectValues(FIELDS.hour);
-  const [minute] = fields.getStringSelectValues(FIELDS.minute);
-  const [yyyy, mm, dd] = String(day).split('-');
-  const rawDate = `${dd}/${mm}/${yyyy} ${hour}:${minute}`;
-  const scheduledAt =
-    isIn(HOUR_CHOICES, hour) && isIn(MINUTE_CHOICES, minute) ? parseDateTime(rawDate, config.timezone) : null;
-  if (!scheduledAt) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Date invalide, réessaie.`));
+/** Liste Minutes : la date et l'heure sont enregistrées, l'aperçu revient. */
+async function handleMinutePick(interaction, [id, day, hour]) {
+  const draft = await loadEditableDraft(interaction, id);
+  if (!draft) return;
+  const [minute] = interaction.values;
 
-  // Au moins 10 min à l'avance, et pas pendant une autre session du créateur.
+  // Refus : les listes restent affichées (date et heure choisies) et un message l'explique.
+  const refuse = async (message) => {
+    await showDatePicker(interaction, draft, { day, hour });
+    return interaction.followUp(ephemeralText(message));
+  };
+
+  // L'horaire a pu passer depuis l'affichage des listes.
+  if (!isSlotAvailable(day, hour, minute)) {
+    return refuse(`${EMOJI.ERREUR} Cet horaire est déjà passé : choisis-en un autre.`);
+  }
+  const { rawDate, scheduledAt } = toSlot(day, hour, minute);
+
+  // Pas pendant une autre session du créateur.
   const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
-  if (dateError) return interaction.reply(ephemeralText(`${dateError}\nAucune modification enregistrée.`));
+  if (dateError) return refuse(`${dateError}\nAucune modification enregistrée.`);
 
   // Le superviseur ne peut pas non plus être sur deux sessions en même temps.
   const notices = [];
   if (draft.supervisorId && !isCoAtm(interaction.member)) {
     const supervisorError = await checkSupervisorAvailability(draft.guildId, draft.supervisorId, scheduledAt);
     if (supervisorError && getConfirmedSupervisorId(draft)) {
-      return interaction.reply(
-        ephemeralText(
-          `${supervisorError}\nTon superviseur ne peut pas être sur deux sessions en même temps : choisis une autre heure.`,
-        ),
+      return refuse(
+        `${supervisorError}\nTon superviseur ne peut pas être sur deux sessions en même temps : choisis une autre heure.`,
       );
     }
     if (supervisorError) {
@@ -308,7 +333,11 @@ async function handlePingButton(interaction, [id]) {
 /* Bouton « Poster la session »                                       */
 /* ------------------------------------------------------------------ */
 
-async function handleSendButton(interaction, [id]) {
+/**
+ * Poste (ou programme) la session. Si elle commence dans moins de 10 minutes, une confirmation est
+ * d'abord demandée (`confirmed` : « Oui, j'en suis sûr ! » cliqué).
+ */
+async function sendSession(interaction, id, confirmed) {
   const draft = await loadDraft(interaction, id);
   if (!draft) return;
   if (!isDraftComplete(draft, interaction.guild)) {
@@ -347,6 +376,11 @@ async function handleSendButton(interaction, [id]) {
     }
   }
 
+  // Moins de 10 minutes avant son début : confirmation demandée.
+  if (!confirmed && draft.scheduledAt.getTime() - Date.now() < MIN_POST_DELAY) {
+    return interaction.update(renderSendConfirm(draft));
+  }
+
   // Suppression atomique : empêche un double envoi en cas de double clic.
   const claimed = await AtmDraft.findOneAndDelete({ _id: draft._id });
   if (!claimed) return interaction.deferUpdate();
@@ -376,13 +410,23 @@ async function handleSendButton(interaction, [id]) {
   }
 }
 
+/** Bouton « Poster la session ». */
+const handleSendButton = (interaction, [id]) => sendSession(interaction, id, false);
+
+/** Bouton « Oui, j'en suis sûr ! » (session qui commence dans moins de 10 minutes). */
+const handleSendConfirm = (interaction, [id]) => sendSession(interaction, id, true);
+
 module.exports = {
   handleInfoButton,
   handleInfoModal,
   handleDateButton,
-  handleDateModal,
+  handleDayPick,
+  handleHourPick,
+  handleMinutePick,
+  handlePickBack,
   handleSupervisorButton,
   handleSupervisorModal,
   handlePingButton,
   handleSendButton,
+  handleSendConfirm,
 };
