@@ -13,6 +13,7 @@ const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -24,26 +25,26 @@ function renderProgramReminder(session, finalLine) {
   const ts = toUnix(session.scheduledAt);
   const publish = toUnix(session.publishAt);
   const lines = [
-    '## 📅 Session ATM programmée',
+    `## ${EMOJI.STATUT_PROGRAMMEE} Session ATM programmée`,
     `<@${session.creatorId}>, ta session prévue le <t:${ts}:d> à <t:${ts}:t> sera postée <t:${publish}:R> (à <t:${publish}:t>).`,
     '',
   ];
 
   let buttons = null;
   if (finalLine) lines.push(finalLine);
-  else if (session.programReminder?.confirmedAt) lines.push('✅ **Tu as confirmé vouloir faire cette session.**');
+  else if (session.programReminder?.confirmedAt) lines.push(`${EMOJI.SUCCES} **Tu as confirmé vouloir faire cette session.**`);
   else {
     lines.push('Veux-tu toujours la faire ?');
     buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`atm:progok:${session._id}`)
         .setStyle(ButtonStyle.Success)
-        .setEmoji('✅')
+        .setEmoji(EMOJI.BOUTON_TOUJOURS_LA_FAIRE)
         .setLabel('Je veux toujours la faire'),
       new ButtonBuilder()
         .setCustomId(`atm:unprog:${session._id}:reminder`)
         .setStyle(ButtonStyle.Danger)
-        .setEmoji('🗑️')
+        .setEmoji(EMOJI.BOUTON_DEPROGRAMMER)
         .setLabel('Déprogrammer'),
     );
   }
@@ -112,7 +113,7 @@ async function publishProgrammedSessions(client) {
     try {
       const message = await postSessionMessage(client, session);
       logAction('Session', `Session programmée ${session._id} postée automatiquement : ${message.url}`);
-      await closeProgramReminder(client, session, `📨 **Session postée :** ${message.url}`);
+      await closeProgramReminder(client, session, `${EMOJI.ENVOI} **Session postée :** ${message.url}`);
     } catch (error) {
       console.error('[Programmation] Publication impossible, nouvel essai plus tard :', error);
       await AtmSession.findByIdAndUpdate(session._id, { $set: { status: 'scheduled' } });
@@ -130,7 +131,7 @@ async function unprogramSession(client, sessionId, userId) {
     logAction('BDD', `Suppression dans Session-ATM : session programmée ${session._id}`);
     logAction('Session', `Session ${session._id} déprogrammée par ${userId} (ne sera jamais postée)`);
   }
-  if (session) await closeProgramReminder(client, session, '🗑️ **Session déprogrammée** : elle ne sera pas postée.');
+  if (session) await closeProgramReminder(client, session, `${EMOJI.SUPPRESSION} **Session déprogrammée** : elle ne sera pas postée.`);
   return session;
 }
 

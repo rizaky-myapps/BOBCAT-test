@@ -13,6 +13,7 @@ const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -25,7 +26,7 @@ function renderStartCheck(session, finalLine) {
   const ts = toUnix(session.scheduledAt);
   const check = session.startCheck;
   const lines = [
-    '## ⏰ Session ATM non commencée',
+    `## ${EMOJI.RAPPEL} Session ATM non commencée`,
     `<@${session.creatorId}>, la session prévue le <t:${ts}:d> à <t:${ts}:t> n'a toujours pas commencé.`,
     '',
   ];
@@ -36,7 +37,7 @@ function renderStartCheck(session, finalLine) {
   } else if (check?.status === 'maintained') {
     const deadline = toUnix(new Date(check.maintainedAt.getTime() + START_DEADLINE));
     lines.push(
-      `✅ **Session maintenue** par <@${check.maintainedBy}> : elle doit commencer <t:${deadline}:R>, sinon elle sera annulée.`,
+      `${EMOJI.SUCCES} **Session maintenue** par <@${check.maintainedBy}> : elle doit commencer <t:${deadline}:R>, sinon elle sera annulée.`,
     );
   } else {
     lines.push('Est-elle maintenue ?');

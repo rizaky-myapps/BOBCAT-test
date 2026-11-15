@@ -16,6 +16,7 @@ const { formatDateTime, toUnix } = require('../utils/date');
 const { rememberPreview } = require('../atm/supervision');
 const { separator } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /**
  * Affiche l'aperçu de la session (brouillon réutilisé s'il existe), en réponse à la commande
@@ -45,14 +46,14 @@ function renderBeforePreview(programmed, today) {
     const ts = toUnix(session.scheduledAt);
     const publish = toUnix(session.publishAt);
     lines.push(
-      `📅 Ta session programmée du <t:${ts}:d> à <t:${ts}:t> sera postée <t:${publish}:R> (à <t:${publish}:t>).`,
+      `${EMOJI.STATUT_PROGRAMMEE} Ta session programmée du <t:${ts}:d> à <t:${ts}:t> sera postée <t:${publish}:R> (à <t:${publish}:t>).`,
     );
   }
   for (const { session, leads } of today) {
     lines.push(
       leads
-        ? `🛡️ Tu diriges déjà une session aujourd'hui : ${sessionUrl(session)}`
-        : `👥 Tu participes déjà à une session aujourd'hui : ${sessionUrl(session)}`,
+        ? `${EMOJI.CO_ATM} Tu diriges déjà une session aujourd'hui : ${sessionUrl(session)}`
+        : `${EMOJI.AGENTS} Tu participes déjà à une session aujourd'hui : ${sessionUrl(session)}`,
     );
   }
   lines.push(
@@ -66,14 +67,14 @@ function renderBeforePreview(programmed, today) {
     new ButtonBuilder()
       .setCustomId(`atm:unprog:${session._id}`)
       .setStyle(ButtonStyle.Danger)
-      .setEmoji('🗑️')
+      .setEmoji(EMOJI.BOUTON_DEPROGRAMMER)
       .setLabel(programmed.length > 1 ? `Déprogrammer (${formatDateTime(session.scheduledAt, config.timezone)})` : 'Déprogrammer'),
   );
   buttons.push(
     new ButtonBuilder()
       .setCustomId('atm:force')
       .setStyle(ButtonStyle.Primary)
-      .setEmoji('📨')
+      .setEmoji(EMOJI.BOUTON_NOUVELLE_SESSION)
       .setLabel(programmed.length ? 'Nouvelle session' : 'Poster quand même'),
   );
 

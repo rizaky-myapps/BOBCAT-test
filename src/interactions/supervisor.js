@@ -7,6 +7,7 @@ const { findConflictingSessions, sessionUrl } = require('../atm/service');
 const { notifyResolution, renderSupervisionRequest, resolveRequest } = require('../atm/supervision');
 const { ephemeralText } = require('../utils/v2');
 const { logAction, who } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /** Soumission du modal /superviseur : la sélection devient la liste des superviseurs en base. */
 async function handleSupervisorModal(interaction) {
@@ -36,8 +37,8 @@ async function handleSupervisorModal(interaction) {
   return interaction.reply(
     ephemeralText(
       members.length
-        ? `✅ **Superviseurs enregistrés (${members.length}) :**\n${members.map((m) => `> - <@${m.id}>`).join('\n')}`
-        : '✅ Aucun superviseur sélectionné : la liste des superviseurs est vide.',
+        ? `${EMOJI.SUCCES} **Superviseurs enregistrés (${members.length}) :**\n${members.map((m) => `> - <@${m.id}>`).join('\n')}`
+        : `${EMOJI.SUCCES} Aucun superviseur sélectionné : la liste des superviseurs est vide.`,
     ),
   );
 }
@@ -50,10 +51,10 @@ async function handleSupervisorAnswer(interaction, [draftId, requestId], answer)
   const draft = isValidObjectId(draftId) ? await AtmDraft.findById(draftId) : null;
   const request = draft?.supervisorRequest;
   if (!request || request.id !== requestId || request.status !== 'pending') {
-    return interaction.reply(ephemeralText("ℹ️ Cette demande de supervision n'est plus d'actualité."));
+    return interaction.reply(ephemeralText(`${EMOJI.INFO} Cette demande de supervision n'est plus d'actualité.`));
   }
   if (interaction.user.id !== request.supervisorId) {
-    return interaction.reply(ephemeralText('⛔ Seul le superviseur sollicité peut répondre à cette demande.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seul le superviseur sollicité peut répondre à cette demande.`));
   }
 
   const status = request.expiresAt <= new Date() ? 'expired' : answer;
@@ -64,13 +65,13 @@ async function handleSupervisorAnswer(interaction, [draftId, requestId], answer)
     if (conflict) {
       return interaction.reply(
         ephemeralText(
-          `⛔ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nTu ne peux pas superviser celle-ci : clique sur « Pas disponible ».`,
+          `${EMOJI.INTERDIT} Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nTu ne peux pas superviser celle-ci : clique sur « Pas disponible ».`,
         ),
       );
     }
   }
   const updated = await resolveRequest(draft._id, requestId, status);
-  if (!updated) return interaction.reply(ephemeralText("ℹ️ Cette demande de supervision n'est plus d'actualité."));
+  if (!updated) return interaction.reply(ephemeralText(`${EMOJI.INFO} Cette demande de supervision n'est plus d'actualité.`));
 
   await interaction.update(renderSupervisionRequest(draft, updated.supervisorRequest));
   await notifyResolution(interaction.client, updated);

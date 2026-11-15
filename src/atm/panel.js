@@ -12,6 +12,7 @@ const { config } = require('../config');
 const { STATUSES, findLabel } = require('./constants');
 const { dayKey, toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 const button = (customId, style, emoji, label) =>
   new ButtonBuilder().setCustomId(customId).setStyle(style).setEmoji(emoji).setLabel(label);
@@ -48,7 +49,7 @@ async function renderSessionPanel(session, notice) {
   const close = new ButtonBuilder()
     .setCustomId(inProgress ? `atm:pfinish:${id}` : `atm:pcancel:${id}:panel`)
     .setStyle(ButtonStyle.Danger)
-    .setEmoji('🛑');
+    .setEmoji(EMOJI.BOUTON_STOP);
 
   const container = new ContainerBuilder().addSectionComponents(
     new SectionBuilder()
@@ -57,7 +58,7 @@ async function renderSessionPanel(session, notice) {
   );
 
   if (inProgress) {
-    container.addActionRowComponents(row(button(`atm:ppds:${id}`, ButtonStyle.Secondary, '🏧', 'Nouvelle PDS')));
+    container.addActionRowComponents(row(button(`atm:ppds:${id}`, ButtonStyle.Secondary, EMOJI.BOUTON_NOUVELLE_PDS, 'Nouvelle PDS')));
   } else {
     container.addActionRowComponents(
       row(
@@ -68,11 +69,11 @@ async function renderSessionPanel(session, notice) {
     // Dispatching en plusieurs étapes : Discord ne permet pas d'enchaîner deux modals.
     if (session.pendingDispatch?.length) {
       container.addActionRowComponents(
-        row(button(`atm:pdriver:${id}`, ButtonStyle.Primary, '🚙', 'Choisir le conducteur')),
+        row(button(`atm:pdriver:${id}`, ButtonStyle.Primary, EMOJI.BOUTON_CONDUCTEUR, 'Choisir le conducteur')),
       );
     } else if (session.pendingReplacement) {
       container.addActionRowComponents(
-        row(button(`atm:preplace:${id}`, ButtonStyle.Primary, '👥', 'Choisir les remplaçants')),
+        row(button(`atm:preplace:${id}`, ButtonStyle.Primary, EMOJI.BOUTON_REMPLACANTS, 'Choisir les remplaçants')),
       );
     }
     container.addActionRowComponents(row(labelButton(`atm:pstart:${id}`, ButtonStyle.Success, 'Commencer la session')));
@@ -87,20 +88,20 @@ async function renderSessionPanel(session, notice) {
 
 const CONFIRMS = {
   cancel: (id, source) => ({
-    text: "## ⚠️ Annuler la session ATM ?\nTu devras ensuite indiquer la raison de l'annulation. Cette action est définitive.",
-    button: button(`atm:pcancelok:${id}:${source}`, ButtonStyle.Danger, '🛑', 'Oui, annuler la session'),
+    text: `## ${EMOJI.ATTENTION} Annuler la session ATM ?\nTu devras ensuite indiquer la raison de l'annulation. Cette action est définitive.`,
+    button: button(`atm:pcancelok:${id}:${source}`, ButtonStyle.Danger, EMOJI.BOUTON_OUI_ANNULER, 'Oui, annuler la session'),
   }),
   finish: (id) => ({
-    text: '## ⚠️ Terminer la session ATM ?\nTous les boutons de la session et de ses PDS seront désactivés. Cette action est définitive.',
-    button: button(`atm:pfinishok:${id}`, ButtonStyle.Danger, '🏁', 'Oui, terminer la session'),
+    text: `## ${EMOJI.ATTENTION} Terminer la session ATM ?\nTous les boutons de la session et de ses PDS seront désactivés. Cette action est définitive.`,
+    button: button(`atm:pfinishok:${id}`, ButtonStyle.Danger, EMOJI.BOUTON_OUI_TERMINER, 'Oui, terminer la session'),
   }),
   start: (id, source, session) => ({
     text: [
-      '## ⚠️ Commencer la session ATM ?',
+      `## ${EMOJI.ATTENTION} Commencer la session ATM ?`,
       'Les agents présents sur le dispatch sont-ils **tous autour de la table** ?',
       ...session.dispatch.map((agent) => `> - <@${agent.userId}>`),
     ].join('\n'),
-    button: button(`atm:pstartok:${id}`, ButtonStyle.Success, '✅', 'Oui, ils sont tous là'),
+    button: button(`atm:pstartok:${id}`, ButtonStyle.Success, EMOJI.BOUTON_OUI_COMMENCER, 'Oui, ils sont tous là'),
   }),
 };
 
@@ -116,7 +117,7 @@ function renderConfirm(session, action, source = 'panel') {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))
     .addActionRowComponents(
-      new ActionRowBuilder().addComponents(confirm, button(`atm:pback:${id}:${source}`, ButtonStyle.Secondary, '↩️', 'Retour')),
+      new ActionRowBuilder().addComponents(confirm, button(`atm:pback:${id}:${source}`, ButtonStyle.Secondary, EMOJI.BOUTON_RETOUR, 'Retour')),
     );
 
   return {

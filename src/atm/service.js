@@ -17,6 +17,7 @@ const {
 } = require('./constants');
 const { dayKey, formatDateTime, getDayBounds, toUnix } = require('../utils/date');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
 function resolveVehicle(value, plate) {
@@ -32,10 +33,10 @@ function resolveVehicle(value, plate) {
 function getPlateError(plate) {
   const value = String(plate ?? '');
   if (!value.trim()) {
-    return '❌ Tu as choisi « Autre » : renseigne la plaque du véhicule (elle ne peut pas contenir que des espaces).';
+    return `${EMOJI.ERREUR} Tu as choisi « Autre » : renseigne la plaque du véhicule (elle ne peut pas contenir que des espaces).`;
   }
   if (value.length > MAX_PLATE_LENGTH || !/^[A-Za-z0-9 ]+$/.test(value)) {
-    return `❌ La plaque doit faire ${MAX_PLATE_LENGTH} caractères maximum : lettres, chiffres et espaces uniquement.`;
+    return `${EMOJI.ERREUR} La plaque doit faire ${MAX_PLATE_LENGTH} caractères maximum : lettres, chiffres et espaces uniquement.`;
   }
   return null;
 }
@@ -161,11 +162,11 @@ async function findConflictingSessions(guildId, userId, scheduledAt, excludeId =
 async function checkSessionDate(guildId, userId, scheduledAt) {
   const earliest = Math.floor(Date.now() / 60_000) * 60_000 + MIN_POST_DELAY;
   if (scheduledAt.getTime() < earliest) {
-    return `❌ Une session doit être postée au moins 10 minutes avant son heure de début : choisis <t:${toUnix(new Date(earliest))}:t> ou plus tard.`;
+    return `${EMOJI.ERREUR} Une session doit être postée au moins 10 minutes avant son heure de début : choisis <t:${toUnix(new Date(earliest))}:t> ou plus tard.`;
   }
   const [conflict] = await findConflictingSessions(guildId, userId, scheduledAt);
   if (conflict) {
-    return `❌ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}
+    return `${EMOJI.ERREUR} Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}
 Une session dure environ 1h30 : choisis une heure qui ne la chevauche pas.`;
   }
   return null;

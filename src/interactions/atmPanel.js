@@ -48,13 +48,14 @@ const { isCloudinaryEnabled } = require('../services/cloudinary');
 const { toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 const { logAction, who } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const AFTER = { returnDocument: 'after' };
 const isIn = (list, value) => list.some((item) => item.value === value);
 
 const STATUS_ERRORS = {
-  pending: "❌ Cette action n'est possible que pour une session en attente (pas encore commencée).",
-  in_progress: '❌ Aucune session en cours : cette action est impossible.',
+  pending: `${EMOJI.ERREUR} Cette action n'est possible que pour une session en attente (pas encore commencée).`,
+  in_progress: `${EMOJI.ERREUR} Aucune session en cours : cette action est impossible.`,
 };
 
 /**
@@ -64,8 +65,8 @@ const STATUS_ERRORS = {
 async function loadManageable(interaction, id, status) {
   const session = await findSession(id);
   let error = null;
-  if (!session) error = '❌ Cette session est introuvable.';
-  else if (!canManageSession(interaction, session)) error = '⛔ Seuls le CO-ATM de la session et la direction peuvent la gérer.';
+  if (!session) error = `${EMOJI.ERREUR} Cette session est introuvable.`;
+  else if (!canManageSession(interaction, session)) error = `${EMOJI.INTERDIT} Seuls le CO-ATM de la session et la direction peuvent la gérer.`;
   else if (status && session.status !== status) error = STATUS_ERRORS[status];
 
   if (!error) return session;
@@ -87,8 +88,8 @@ const memberName = (guild, userId) => {
 function agentLabel(guild, userId) {
   const member = guild.members.cache.get(userId);
   const tags = [];
-  if (isBiker(member)) tags.push('🏍️');
-  if (hasRole(member, config.roles.fusilAPompe)) tags.push('🔫');
+  if (isBiker(member)) tags.push(EMOJI.U2R);
+  if (hasRole(member, config.roles.fusilAPompe)) tags.push(EMOJI.FUSIL_A_POMPE);
   const suffix = tags.length ? ` ${tags.join(' ')}` : '';
   return `${truncate(member?.nickname ?? member?.displayName ?? userId, 100 - suffix.length)}${suffix}`;
 }
@@ -115,20 +116,20 @@ async function handleCancelConfirm(interaction, [id, source = 'panel']) {
 
 /** « Retour » : abandonne l'annulation ou la fin de session. */
 async function handleBack(interaction, [id, source = 'panel']) {
-  if (source !== 'panel') return interaction.update(textMessage('↩️ Annulation abandonnée.'));
+  if (source !== 'panel') return interaction.update(textMessage(`${EMOJI.RETOUR} Annulation abandonnée.`));
   const session = await loadManageable(interaction, id);
   if (!session) return;
-  if (CLOSED_STATUSES.includes(session.status)) return interaction.update(textMessage('🔒 Cette session est clôturée.'));
+  if (CLOSED_STATUSES.includes(session.status)) return interaction.update(textMessage(`${EMOJI.VERROUILLE} Cette session est clôturée.`));
   return interaction.update(await renderSessionPanel(session));
 }
 
 async function handleCancelModal(interaction, [id]) {
   const [reason] = interaction.fields.getStringSelectValues(FIELDS.cancelReason);
   const details = interaction.fields.getTextInputValue(FIELDS.cancelDetails).trim() || null;
-  if (!isIn(CANCEL_REASONS, reason)) return interaction.reply(ephemeralText('❌ Raison invalide.'));
+  if (!isIn(CANCEL_REASONS, reason)) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Raison invalide.`));
   if (reason === CANCEL_OTHER && !details) {
     return interaction.reply(
-      ephemeralText('❌ Tu as choisi « Autre » : précise la raison dans le champ prévu. La session n’a pas été annulée.'),
+      ephemeralText(`${EMOJI.ERREUR} Tu as choisi « Autre » : précise la raison dans le champ prévu. La session n’a pas été annulée.`),
     );
   }
 
@@ -143,7 +144,7 @@ async function handleCancelModal(interaction, [id]) {
   });
   if (!cancelled) return interaction.followUp(ephemeralText(STATUS_ERRORS.pending));
   // Le message de confirmation (panneau ou message privé) est remplacé.
-  return interaction.editReply(textMessage('🛑 Session annulée.'));
+  return interaction.editReply(textMessage(`${EMOJI.SESSION_ANNULEE} Session annulée.`));
 }
 
 /** Bouton « Maintenu » de la question du salon CO-ATM. */
@@ -156,7 +157,7 @@ async function handleKeepButton(interaction, [id]) {
     { $set: { 'startCheck.status': 'maintained', 'startCheck.maintainedAt': new Date(), 'startCheck.maintainedBy': interaction.user.id } },
     AFTER,
   );
-  if (!updated) return interaction.reply(ephemeralText("ℹ️ Cette question n'est plus d'actualité."));
+  if (!updated) return interaction.reply(ephemeralText(`${EMOJI.INFO} Cette question n'est plus d'actualité.`));
   logAction('Session', `Session ${session._id} maintenue par ${who(interaction)}`);
   return interaction.update(renderStartCheck(updated));
 }
@@ -178,7 +179,7 @@ async function handleDispatchButton(interaction, [id]) {
 
   const voters = getCandidates(session).slice(0, 25);
   if (!voters.length) {
-    return interaction.reply(ephemeralText("❌ Aucun agent n'a voté « Je suis disponible » sur cette session."));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Aucun agent n'a voté « Je suis disponible » sur cette session.`));
   }
   const options = voters.map((userId) => ({ label: agentLabel(interaction.guild, userId), value: userId, default: false }));
   return interaction.showModal(buildDispatchModal(session, options, getAgentSlots(session)));
@@ -198,9 +199,9 @@ function getCandidates(session) {
 /** Vérifie le nombre d'agents et la règle de l'U2R (l'agent en plus du véhicule part en moto). */
 function checkAgentGroup(guild, session, group, { allowEmpty = false } = {}) {
   const { vehicleSeats, maxAgents } = getAgentSlots(session);
-  if ((!group.length && !allowEmpty) || group.length > maxAgents) return `❌ Sélectionne entre 1 et ${maxAgents} agents.`;
+  if ((!group.length && !allowEmpty) || group.length > maxAgents) return `${EMOJI.ERREUR} Sélectionne entre 1 et ${maxAgents} agents.`;
   if (group.length > vehicleSeats && !group.some((userId) => isBiker(guild.members.cache.get(userId)))) {
-    return `❌ Le ${maxAgents}e agent part en U2R : au moins un des agents doit être U2R.`;
+    return `${EMOJI.ERREUR} Le ${maxAgents}e agent part en U2R : au moins un des agents doit être U2R.`;
   }
   return null;
 }
@@ -212,7 +213,7 @@ async function continueWithGroup(interaction, session, group, intro) {
   return interaction.update(
     await renderSessionPanel(
       updated,
-      `${intro}👥 Agents : ${group.map((userId) => `<@${userId}>`).join(', ')}.\nClique sur « Choisir le conducteur » pour terminer le dispatching.`,
+      `${intro}${EMOJI.AGENTS} Agents : ${group.map((userId) => `<@${userId}>`).join(', ')}.\nClique sur « Choisir le conducteur » pour terminer le dispatching.`,
     ),
   );
 }
@@ -252,9 +253,9 @@ async function finalizeDispatch(interaction, session, agents) {
   );
   await syncSessionMessage(interaction.client, updated);
 
-  const notice = ['✅ Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.'];
+  const notice = [`${EMOJI.SUCCES} Dispatch mis à jour. Le bouton « Je suis disponible » est désormais inutilisable.`];
   if (replaced.length) {
-    notice.push(...replaced.map((agent) => `🔄 <@${agent.userId}> retiré de la session : ${agent.reason}`));
+    notice.push(...replaced.map((agent) => `${EMOJI.REMPLACEMENT} <@${agent.userId}> retiré de la session : ${agent.reason}`));
   }
   return interaction.update(await renderSessionPanel(updated, notice.join('\n')));
 }
@@ -291,7 +292,7 @@ async function handleReplaceModal(interaction, [id]) {
   const freeSlots = getAgentSlots(session).maxAgents - dispatched.length;
   if (!toReplace.length && freeSlots <= 0) {
     return interaction.update(
-      await renderSessionPanel(session, '❌ Indique la raison du remplacement pour au moins un agent (le dispatch est complet).'),
+      await renderSessionPanel(session, `${EMOJI.ERREUR} Indique la raison du remplacement pour au moins un agent (le dispatch est complet).`),
     );
   }
 
@@ -300,7 +301,7 @@ async function handleReplaceModal(interaction, [id]) {
     { $set: { pendingReplacement: { agents: toReplace }, pendingDispatch: [] } },
     AFTER,
   );
-  const lines = toReplace.map((agent) => `🔄 <@${agent.userId}> : ${agent.reason}`);
+  const lines = toReplace.map((agent) => `${EMOJI.REMPLACEMENT} <@${agent.userId}> : ${agent.reason}`);
   return interaction.update(
     await renderSessionPanel(
       updated,
@@ -324,7 +325,7 @@ async function handleReplacePickButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
   if (!session.pendingReplacement) {
-    return interaction.reply(ephemeralText('❌ Remplacement expiré : recommence avec « Dispatching ».'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Remplacement expiré : recommence avec « Dispatching ».`));
   }
 
   const kept = getKeptAgents(session);
@@ -334,7 +335,7 @@ async function handleReplacePickButton(interaction, [id]) {
   if (!candidates.length || max <= 0) {
     const error = checkAgentGroup(interaction.guild, session, kept, { allowEmpty: true });
     if (error) return interaction.update(await renderSessionPanel(session, error));
-    return continueWithGroup(interaction, session, kept, "ℹ️ Aucun autre agent disponible : pas de remplaçant.\n");
+    return continueWithGroup(interaction, session, kept, `${EMOJI.INFO} Aucun autre agent disponible : pas de remplaçant.\n`);
   }
 
   const options = candidates.map((userId) => ({ label: agentLabel(interaction.guild, userId), value: userId }));
@@ -345,7 +346,7 @@ async function handleReplacePickModal(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
   if (!session.pendingReplacement) {
-    return interaction.update(await renderSessionPanel(session, '❌ Remplacement expiré : recommence avec « Dispatching ».'));
+    return interaction.update(await renderSessionPanel(session, `${EMOJI.ERREUR} Remplacement expiré : recommence avec « Dispatching ».`));
   }
 
   const candidates = getCandidates(session);
@@ -367,7 +368,7 @@ async function handleDriverButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
   if (!session.pendingDispatch.length) {
-    return interaction.reply(ephemeralText('❌ Sélectionne d’abord les agents avec « Dispatching ».'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Sélectionne d’abord les agents avec « Dispatching ».`));
   }
 
   const toOption = (userId) => ({ label: memberName(interaction.guild, userId), value: userId });
@@ -388,11 +389,11 @@ async function handleDriverModal(interaction, [id]) {
     : null;
 
   let error = null;
-  if (!pending.length || !pending.includes(driverId)) error = '❌ Dispatching expiré : recommence avec « Dispatching ».';
+  if (!pending.length || !pending.includes(driverId)) error = `${EMOJI.ERREUR} Dispatching expiré : recommence avec « Dispatching ».`;
   else if (needsBiker(session)) {
     if (!motoId || !pending.includes(motoId) || !isBiker(interaction.guild.members.cache.get(motoId))) {
-      error = '❌ Sélectionne un U2R.';
-    } else if (motoId === driverId) error = "❌ Le conducteur ne peut pas être l'U2R.";
+      error = `${EMOJI.ERREUR} Sélectionne un U2R.`;
+    } else if (motoId === driverId) error = `${EMOJI.ERREUR} Le conducteur ne peut pas être l'U2R.`;
   }
   if (error) return interaction.update(await renderSessionPanel(session, error));
 
@@ -415,7 +416,7 @@ async function handleInfoButton(interaction, [id]) {
   // Les radios et véhicules utilisés par une autre session à la même heure ne sont pas proposés.
   const choices = getAvailableChoices(await getUsedResources(session.guildId, session.scheduledAt, session._id));
   if (!choices.radios.length) {
-    return interaction.reply(ephemeralText('❌ Toutes les radios sont déjà utilisées par une autre session à ce moment-là.'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Toutes les radios sont déjà utilisées par une autre session à ce moment-là.`));
   }
   return interaction.showModal(buildSessionInfoModal(session, choices));
 }
@@ -435,20 +436,20 @@ async function handleInfoModal(interaction, [id]) {
   const choices = getAvailableChoices(used);
 
   let error = null;
-  if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = '❌ Réponses invalides.';
+  if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = `${EMOJI.ERREUR} Réponses invalides.`;
   else if (vehicleChoice === VEHICLE_OTHER && getPlateError(rawPlate)) error = getPlateError(rawPlate);
   else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice)) {
-    error = '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.';
+    error = `${EMOJI.ERREUR} Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.`;
   } else if (isVehicleUsed(used, vehicle)) {
     // « Autre » : la plaque saisie ne doit pas être celle d'un véhicule déjà utilisé à ce moment-là.
-    error = `❌ La plaque \`${vehicle}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.`;
+    error = `${EMOJI.ERREUR} La plaque \`${vehicle}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.`;
   }
   if (error) return interaction.update(await renderSessionPanel(session, `${error} Aucune modification enregistrée.`));
 
   const updated = await AtmSession.findByIdAndUpdate(session._id, { $set: { radio, tenue, vehicle } }, AFTER);
   logAction('Session', `Informations de la session ${session._id} modifiées par ${who(interaction)} : radio ${radio}, tenue ${tenue}, véhicule ${vehicle}`);
   await syncSessionMessage(interaction.client, updated);
-  return interaction.update(await renderSessionPanel(updated, '✅ Informations de la session mises à jour.'));
+  return interaction.update(await renderSessionPanel(updated, `${EMOJI.SUCCES} Informations de la session mises à jour.`));
 }
 
 /* ------------------------------------------------------------------ */
@@ -475,11 +476,11 @@ function startError(session) {
     const ts = toUnix(session.scheduledAt);
     if (now < start - START_EARLY_WINDOW) {
       const earliest = toUnix(new Date(start - START_EARLY_WINDOW));
-      return `❌ La session est prévue le <t:${ts}:d> à <t:${ts}:t> : elle peut commencer au plus tôt 10 minutes avant, à partir du <t:${earliest}:d> à <t:${earliest}:t> (<t:${earliest}:R>).`;
+      return `${EMOJI.ERREUR} La session est prévue le <t:${ts}:d> à <t:${ts}:t> : elle peut commencer au plus tôt 10 minutes avant, à partir du <t:${earliest}:d> à <t:${earliest}:t> (<t:${earliest}:R>).`;
     }
   }
   if (session.dispatch.length >= MIN_DISPATCH) return null;
-  return `❌ Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`;
+  return `${EMOJI.ERREUR} Il faut au moins ${MIN_DISPATCH} personnes sur le dispatch pour commencer (CO-ATM${session.supervisorId ? ' et superviseur' : ''} compris) : dispatche au moins ${getMinAgents(session)} agent(s).`;
 }
 
 /** « Oui, ils sont tous là » : la session commence. */
@@ -491,7 +492,7 @@ async function handleStartConfirm(interaction, [id]) {
 
   const started = await startSession(interaction.client, session._id);
   if (!started) return interaction.update(await renderSessionPanel(session, STATUS_ERRORS.pending));
-  return interaction.update(await renderSessionPanel(started, '▶️ Session commencée.'));
+  return interaction.update(await renderSessionPanel(started, `${EMOJI.SESSION_COMMENCEE} Session commencée.`));
 }
 
 async function handleFinishButton(interaction, [id]) {
@@ -508,7 +509,7 @@ async function handleFinishConfirm(interaction, [id]) {
   await interaction.deferUpdate();
   const finished = await finishSession(interaction.client, session._id);
   if (!finished) return interaction.followUp(ephemeralText(STATUS_ERRORS.in_progress));
-  return interaction.editReply(textMessage('🏁 Session terminée.'));
+  return interaction.editReply(textMessage(`${EMOJI.SESSION_TERMINEE} Session terminée.`));
 }
 
 /* ------------------------------------------------------------------ */
@@ -519,7 +520,7 @@ async function handlePdsButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'in_progress');
   if (!session) return;
   if (!isCloudinaryEnabled()) {
-    return interaction.reply(ephemeralText("❌ Cloudinary n'est pas configuré : impossible d'enregistrer la photo."));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Cloudinary n'est pas configuré : impossible d'enregistrer la photo.`));
   }
   return interaction.showModal(buildPdsModal(session));
 }
@@ -531,10 +532,10 @@ async function handlePdsModal(interaction, [id]) {
   const mallettes = Number(interaction.fields.getStringSelectValues(FIELDS.mallettes)[0]);
   const [attachment] = getUploadedFiles(interaction, FIELDS.photo);
   if (!Number.isInteger(mallettes) || mallettes < 1 || mallettes > MAX_MALLETTES) {
-    return interaction.update(await renderSessionPanel(session, '❌ Nombre de mallettes invalide.'));
+    return interaction.update(await renderSessionPanel(session, `${EMOJI.ERREUR} Nombre de mallettes invalide.`));
   }
   if (!attachment?.contentType?.startsWith('image/')) {
-    return interaction.update(await renderSessionPanel(session, "❌ Ajoute une photo (image) de l'emplacement de l'ATM."));
+    return interaction.update(await renderSessionPanel(session, `${EMOJI.ERREUR} Ajoute une photo (image) de l'emplacement de l'ATM.`));
   }
 
   // L'envoi de la photo sur Cloudinary peut dépasser les 3 secondes accordées par Discord.
@@ -548,7 +549,7 @@ async function handlePdsModal(interaction, [id]) {
     );
   } catch (error) {
     console.error('[PDS] Création impossible :', error);
-    return interaction.editReply(await renderSessionPanel(session, `❌ Impossible d'envoyer la PDS : ${error.message}`));
+    return interaction.editReply(await renderSessionPanel(session, `${EMOJI.ERREUR} Impossible d'envoyer la PDS : ${error.message}`));
   }
 }
 

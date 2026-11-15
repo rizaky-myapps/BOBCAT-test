@@ -3,6 +3,7 @@ const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
 const { buildSupervisorModal, truncate } = require('../atm/modals');
 const { ephemeralText } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 /** Nombre maximum d'options d'un menu de sélection Discord. */
 const MAX_OPTIONS = 25;
@@ -18,12 +19,12 @@ module.exports = {
     const roleId = config.roles.coAtm;
     if (!roleId) {
       return interaction.reply(
-        ephemeralText("❌ Le rôle CO ATM n'est pas configuré (`BOBCAT_CO_ATM_ROLE_ID` dans le .env)."),
+        ephemeralText(`${EMOJI.ERREUR} Le rôle CO ATM n'est pas configuré (\`BOBCAT_CO_ATM_ROLE_ID\` dans le .env).`),
       );
     }
 
     const role = interaction.guild.roles.cache.get(roleId);
-    if (!role) return interaction.reply(ephemeralText('❌ Le rôle CO ATM configuré est introuvable sur ce serveur.'));
+    if (!role) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le rôle CO ATM configuré est introuvable sur ce serveur.`));
 
     const current = await Supervisor.find({ guildId: interaction.guildId });
     const currentIds = new Set(current.map((supervisor) => supervisor.userId));
@@ -38,7 +39,7 @@ module.exports = {
       .slice(0, MAX_OPTIONS);
 
     if (!members.length) {
-      return interaction.reply(ephemeralText(`❌ Aucun membre n'a le rôle ${role}.`));
+      return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Aucun membre n'a le rôle ${role}.`));
     }
 
     const options = members.map((member) => ({

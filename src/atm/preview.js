@@ -8,6 +8,7 @@ const {
   resolveVehicle,
 } = require('./service');
 const { separator } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 /** Une demande de supervision attend-elle la réponse du superviseur ? */
 const isRequestPending = (draft) => draft.supervisorRequest?.status === 'pending';
@@ -57,13 +58,13 @@ function renderPreview(draft, guild) {
   // Tant que le superviseur n'a pas répondu, les informations ne sont pas modifiables.
   const noDate = !draft.scheduledAt;
   const rows = [
-    row(button('date', ButtonStyle.Secondary, '🕑', "Choisir la date et l'heure").setDisabled(locked)),
-    row(button('info', ButtonStyle.Secondary, 'ℹ️', 'Informations générales').setDisabled(locked || noDate)),
+    row(button('date', ButtonStyle.Secondary, EMOJI.BOUTON_DATE, "Choisir la date et l'heure").setDisabled(locked)),
+    row(button('info', ButtonStyle.Secondary, EMOJI.BOUTON_INFORMATIONS, 'Informations générales').setDisabled(locked || noDate)),
   ];
   // Uniquement pour les membres sans le rôle CO ATM ; plus modifiable une fois la présence validée.
   if (withSupervisor) {
     rows.push(
-      row(button('sup', ButtonStyle.Secondary, '🛡️', 'Sélectionner un superviseur').setDisabled(locked || accepted || noDate)),
+      row(button('sup', ButtonStyle.Secondary, EMOJI.BOUTON_SUPERVISEUR, 'Sélectionner un superviseur').setDisabled(locked || accepted || noDate)),
     );
   }
   rows.push(
@@ -71,10 +72,10 @@ function renderPreview(draft, guild) {
       button(
         'ping',
         draft.ping ? ButtonStyle.Success : ButtonStyle.Danger,
-        draft.ping ? '🔔' : '🔕',
+        draft.ping ? EMOJI.BOUTON_PING_OUI : EMOJI.BOUTON_PING_NON,
         `Ping les agents : ${draft.ping ? 'Oui' : 'Non'}`,
       ),
-      button('send', ButtonStyle.Primary, '📨', 'Poster la session').setDisabled(!isDraftComplete(draft, guild)),
+      button('send', ButtonStyle.Primary, EMOJI.BOUTON_POSTER, 'Poster la session').setDisabled(!isDraftComplete(draft, guild)),
     ),
   );
 

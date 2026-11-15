@@ -1,4 +1,5 @@
 const { config } = require('../config');
+const EMOJI = require('../emoji');
 
 /**
  * Valeurs proposées dans les menus de sélection du modal /atm.
@@ -27,11 +28,11 @@ const VEHICLES = [
 
 /** Statuts d'une session (affichés dans « Informations »). */
 const STATUSES = [
-  { value: 'scheduled', label: 'Programmée', emoji: '📅' },
-  { value: 'pending', label: 'En attente...', emoji: '⏳' },
-  { value: 'in_progress', label: 'En cours...', emoji: '🚨' },
-  { value: 'done', label: 'Terminée', emoji: '✅' },
-  { value: 'cancelled', label: 'Annulée', emoji: '❌' },
+  { value: 'scheduled', label: 'Programmée', emoji: EMOJI.STATUT_PROGRAMMEE },
+  { value: 'pending', label: 'En attente...', emoji: EMOJI.STATUT_EN_ATTENTE },
+  { value: 'in_progress', label: 'En cours...', emoji: EMOJI.STATUT_EN_COURS },
+  { value: 'done', label: 'Terminée', emoji: EMOJI.STATUT_TERMINEE },
+  { value: 'cancelled', label: 'Annulée', emoji: EMOJI.STATUT_ANNULEE },
 ];
 
 /** Statuts d'une session terminée ou annulée : tous ses boutons sont désactivés. */
@@ -76,12 +77,12 @@ const MAX_MALLETTES = 5;
  * L'ordre ici est l'ordre d'affichage des emojis à côté de l'agent.
  */
 const AGENT_ROLES = [
-  { value: 'chef', emoji: '🛡️', label: "Chef d'opération de la mission" },
-  { value: 'co_atm', emoji: '🧳', label: 'CO ATM (en cas du supervision)' },
-  { value: 'pompe', emoji: '🔫', label: 'Fusil à pompe' },
-  { value: 'conducteur', emoji: '🚙', label: 'Conducteur' },
-  { value: 'moto', emoji: '🏍️', label: 'U2R' },
-  { value: 'nouveau', emoji: '🆕', label: "Besoin d'explication" },
+  { value: 'chef', emoji: EMOJI.CO_ATM, label: "Chef d'opération de la mission" },
+  { value: 'co_atm', emoji: EMOJI.SUPERVISEUR, label: 'CO ATM (en cas du supervision)' },
+  { value: 'pompe', emoji: EMOJI.FUSIL_A_POMPE, label: 'Fusil à pompe' },
+  { value: 'conducteur', emoji: EMOJI.CONDUCTEUR, label: 'Conducteur' },
+  { value: 'moto', emoji: EMOJI.U2R, label: 'U2R' },
+  { value: 'nouveau', emoji: EMOJI.NOUVEAU, label: "Besoin d'explication" },
 ];
 
 /** Nombre de lignes affichées au minimum dans « Agents sur dispatch ». */

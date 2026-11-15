@@ -5,6 +5,7 @@ const { renderSessionMessage } = require('../atm/message');
 const { renderSessionPanel } = require('../atm/panel');
 const { canManageSession, findConflictingSessions, findSession, sessionUrl } = require('../atm/service');
 const { ephemeralText } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 /**
  * Bouton « Je suis disponible » : ajoute / retire l'agent de la liste.
@@ -12,24 +13,24 @@ const { ephemeralText } = require('../utils/v2');
  */
 async function handleAvailableButton(interaction, [id]) {
   const session = await findSession(id);
-  if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
+  if (!session) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Cette session est introuvable.`));
   if (CLOSED_STATUSES.includes(session.status)) {
-    return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
+    return interaction.reply(ephemeralText(`${EMOJI.VERROUILLE} Cette session est clôturée.`));
   }
   if (session.status === 'in_progress') {
-    return interaction.reply(ephemeralText('🔒 Cette session a déjà commencé.'));
+    return interaction.reply(ephemeralText(`${EMOJI.VERROUILLE} Cette session a déjà commencé.`));
   }
   if (session.dispatchedAt) {
-    return interaction.reply(ephemeralText('🔒 Le dispatching de cette session est déjà fait.'));
+    return interaction.reply(ephemeralText(`${EMOJI.VERROUILLE} Le dispatching de cette session est déjà fait.`));
   }
 
   const userId = interaction.user.id;
   if (userId === session.creatorId) {
-    return interaction.reply(ephemeralText('⛔ Tu es le CO-ATM de cette session : tu ne peux pas te déclarer disponible.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Tu es le CO-ATM de cette session : tu ne peux pas te déclarer disponible.`));
   }
   if (session.dispatch.some((agent) => agent.userId === userId)) {
     return interaction.reply(
-      ephemeralText('⛔ Tu es sur le dispatch de cette session : tu ne peux pas te déclarer disponible.'),
+      ephemeralText(`${EMOJI.INTERDIT} Tu es sur le dispatch de cette session : tu ne peux pas te déclarer disponible.`),
     );
   }
 
@@ -39,7 +40,7 @@ async function handleAvailableButton(interaction, [id]) {
     if (conflict) {
       return interaction.reply(
         ephemeralText(
-          `⛔ Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nUne session dure environ 1h30 : tu ne peux pas voter pour celle-ci.`,
+          `${EMOJI.INTERDIT} Tu es déjà sur une session à ce moment-là : ${sessionUrl(conflict)}\nUne session dure environ 1h30 : tu ne peux pas voter pour celle-ci.`,
         ),
       );
     }
@@ -66,8 +67,8 @@ async function handleAvailableButton(interaction, [id]) {
   await interaction.followUp(
     ephemeralText(
       joined
-        ? '✅ Tu es maintenant dans la liste des agents disponibles. Reclique sur le bouton pour te retirer.'
-        : '↩️ Tu as été retiré de la liste des agents disponibles.',
+        ? `${EMOJI.SUCCES} Tu es maintenant dans la liste des agents disponibles. Reclique sur le bouton pour te retirer.`
+        : `${EMOJI.RETOUR} Tu as été retiré de la liste des agents disponibles.`,
     ),
   );
 }
@@ -75,12 +76,12 @@ async function handleAvailableButton(interaction, [id]) {
 /** Bouton ⚙️ : panneau de gestion, réservé au CO-ATM de la session et à la direction. */
 async function handleManageButton(interaction, [id]) {
   const session = await findSession(id);
-  if (!session) return interaction.reply(ephemeralText('❌ Cette session est introuvable.'));
+  if (!session) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Cette session est introuvable.`));
   if (!canManageSession(interaction, session)) {
-    return interaction.reply(ephemeralText('⛔ Seuls le CO-ATM de la session et la direction peuvent la gérer.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seuls le CO-ATM de la session et la direction peuvent la gérer.`));
   }
   if (CLOSED_STATUSES.includes(session.status)) {
-    return interaction.reply(ephemeralText('🔒 Cette session est clôturée.'));
+    return interaction.reply(ephemeralText(`${EMOJI.VERROUILLE} Cette session est clôturée.`));
   }
 
   const panel = await renderSessionPanel(session);

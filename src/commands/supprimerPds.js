@@ -12,6 +12,7 @@ const {
 const PdsAtm = require('../models/PdsAtm');
 const { canManageSession, findSession } = require('../atm/service');
 const { ephemeralText, separator } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 module.exports = {
   /** Clic droit sur le message d'une PDS → Applications → « Supprimer la PDS ». */
@@ -27,18 +28,18 @@ module.exports = {
    */
   async execute(interaction) {
     const pds = await PdsAtm.findOne({ messageId: interaction.targetId });
-    if (!pds) return interaction.reply(ephemeralText("❌ Ce message n'est pas une PDS ATM."));
+    if (!pds) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Ce message n'est pas une PDS ATM.`));
 
     const session = await findSession(String(pds.sessionId));
     if (session && !canManageSession(interaction, session)) {
-      return interaction.reply(ephemeralText('⛔ Seuls le CO-ATM de la session et la direction peuvent supprimer cette PDS.'));
+      return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seuls le CO-ATM de la session et la direction peuvent supprimer cette PDS.`));
     }
 
     const number = String(pds.number).padStart(2, '0');
     const container = new ContainerBuilder()
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `## ⚠️ Supprimer la PDS n°${number} ?\nLa PDS, sa photo et son message seront supprimés définitivement.`,
+          `## ${EMOJI.ATTENTION} Supprimer la PDS n°${number} ?\nLa PDS, sa photo et son message seront supprimés définitivement.`,
         ),
       )
       .addActionRowComponents(
@@ -46,9 +47,9 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId(`pds:del:${pds._id}`)
             .setStyle(ButtonStyle.Danger)
-            .setEmoji('🗑️')
+            .setEmoji(EMOJI.BOUTON_SUPPRIMER_PDS)
             .setLabel('Oui, supprimer la PDS'),
-          new ButtonBuilder().setCustomId('pds:delno').setStyle(ButtonStyle.Secondary).setEmoji('↩️').setLabel('Annuler'),
+          new ButtonBuilder().setCustomId('pds:delno').setStyle(ButtonStyle.Secondary).setEmoji(EMOJI.BOUTON_ANNULER_SUPPRESSION).setLabel('Annuler'),
         ),
       );
 

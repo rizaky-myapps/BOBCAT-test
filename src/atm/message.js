@@ -18,6 +18,7 @@ const {
 } = require('./constants');
 const { toUnix } = require('../utils/date');
 const { separator } = require('../utils/v2');
+const EMOJI = require('../emoji');
 
 /** Nombre max d'agents listés dans « Agent(s) disponible(s) » (limite de 4000 caractères par message). */
 const MAX_AVAILABLE_SHOWN = 60;
@@ -98,7 +99,7 @@ function buildMainContainer(data, { manageCustomId, manageDisabled = false, acce
         new ButtonBuilder()
           .setCustomId(manageCustomId)
           .setStyle(ButtonStyle.Secondary)
-          .setEmoji('⚙️')
+          .setEmoji(EMOJI.BOUTON_GESTION)
           .setDisabled(manageDisabled),
       ),
   );

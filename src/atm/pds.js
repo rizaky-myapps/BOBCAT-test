@@ -16,6 +16,7 @@ const { sessionUrl } = require('./service');
 const { deleteImage, uploadImageFromUrl } = require('../services/cloudinary');
 const { dayKey, formatDate } = require('../utils/date');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /**
  * "[22] • Yvick Waler" à partir du surnom Discord ("[22] Yvick Waler", "22 | Yvick Waler",
@@ -34,7 +35,7 @@ function buildAgentLabels(guild, session) {
   return session.dispatch.map((agent) => {
     const member = guild.members.cache.get(agent.userId);
     const name = formatAgentName(member?.nickname ?? member?.displayName ?? agent.userId);
-    return agent.roles.includes('moto') ? `${name} 🏍️` : name;
+    return agent.roles.includes('moto') ? `${name} ${EMOJI.U2R}` : name;
   });
 }
 
@@ -53,7 +54,7 @@ function renderPdsMessage(pds, session) {
           new ButtonBuilder()
             .setCustomId(`pds:edit:${pds._id}`)
             .setStyle(ButtonStyle.Secondary)
-            .setEmoji('✏️')
+            .setEmoji(EMOJI.BOUTON_MODIFIER_PDS)
             .setDisabled(!editable),
         ),
     )

@@ -8,6 +8,7 @@ const { handleAvailableButton, handleManageButton } = require('./atmSession');
 const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
 const { ephemeralText } = require('../utils/v2');
 const { logInteraction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /**
  * Routage des composants / modals par préfixe de custom_id ("<namespace>:<action>:<arguments...>").
@@ -87,7 +88,7 @@ async function handleInteraction(interaction) {
     console.error(`[Interaction] Erreur (${interaction.customId ?? interaction.commandName}) :`, error);
     if (!interaction.isRepliable()) return;
 
-    const payload = ephemeralText('❌ Une erreur est survenue, réessaie plus tard.');
+    const payload = ephemeralText(`${EMOJI.ERREUR} Une erreur est survenue, réessaie plus tard.`);
     const reply = interaction.replied || interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload);
     await reply.catch(() => null);
   }

@@ -6,6 +6,7 @@ const { fetchCoAtmChannel } = require('./supervision');
 const { toUnix } = require('../utils/date');
 const { textMessage } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -14,9 +15,9 @@ async function pingCoAtmForDispatch(client, session) {
   const ts = toUnix(session.scheduledAt);
   const message = textMessage(
     [
-      '## 📋 Session ATM à dispatcher',
+      `## ${EMOJI.DISPATCH_A_FAIRE} Session ATM à dispatcher`,
       `<@${session.creatorId}>, ta session prévue à <t:${ts}:t> (<t:${ts}:R>) n'est pas encore dispatchée : ${session.available.length} agent(s) disponible(s).`,
-      'Fais ton dispatch avec le bouton ⚙️ de la session → « Gestion du Dispatch ».',
+      `Fais ton dispatch avec le bouton ${EMOJI.BOUTON_GESTION} de la session → « Gestion du Dispatch ».`,
     ].join('\n'),
     { buttons: [sessionLinkButton(session)] },
   );
@@ -32,7 +33,7 @@ async function notifyNoAgents(client, session) {
   await channel.send(
     textMessage(
       [
-        "## ❌ Session ATM annulée : manque d'agents",
+        `## ${EMOJI.STATUT_ANNULEE} Session ATM annulée : manque d'agents`,
         `La session de <@${session.creatorId}> prévue le <t:${ts}:d> à <t:${ts}:t> est annulée : pas assez d'agents disponibles.`,
       ].join('\n'),
       { buttons: [sessionLinkButton(session)] },
@@ -111,7 +112,7 @@ async function sendDispatchReminders(client) {
     const ts = toUnix(session.scheduledAt);
     const message = textMessage(
       [
-        `## ⏰ Rappel : session ATM <t:${ts}:R>`,
+        `## ${EMOJI.RAPPEL} Rappel : session ATM <t:${ts}:R>`,
         `${agents.map((userId) => `<@${userId}>`).join(' ')}, vous êtes sur le dispatch de la session prévue à <t:${ts}:t>.`,
         "Rendez-vous au QG à l'heure indiquée.",
       ].join('\n'),

@@ -15,15 +15,16 @@ const { resolveVehicle } = require('./service');
 const { toUnix } = require('../utils/date');
 const { ephemeralText, separator } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /* ------------------------------------------------------------------ */
 /* Message de demande dans le salon CO-ATM                             */
 /* ------------------------------------------------------------------ */
 
 const STATUS_LINES = {
-  accepted: '✅ **Présence validée.**',
-  refused: '❌ **Indisponible.**',
-  expired: '⌛ **Pas de réponse dans les 10 minutes : demande refusée.**',
+  accepted: `${EMOJI.SUCCES} **Présence validée.**`,
+  refused: `${EMOJI.ERREUR} **Indisponible.**`,
+  expired: `${EMOJI.EXPIRE} **Pas de réponse dans les 10 minutes : demande refusée.**`,
 };
 
 /**
@@ -58,12 +59,12 @@ function renderSupervisionRequest(draft, request) {
         new ButtonBuilder()
           .setCustomId(`sup:accept:${draft._id}:${request.id}`)
           .setStyle(ButtonStyle.Success)
-          .setEmoji('✅')
+          .setEmoji(EMOJI.BOUTON_SUPERVISION_OUI)
           .setLabel('Je suis disponible'),
         new ButtonBuilder()
           .setCustomId(`sup:refuse:${draft._id}:${request.id}`)
           .setStyle(ButtonStyle.Danger)
-          .setEmoji('❌')
+          .setEmoji(EMOJI.BOUTON_SUPERVISION_NON)
           .setLabel('Pas disponible'),
       ),
     );
@@ -176,10 +177,10 @@ async function resolveRequest(draftId, requestId, status) {
 }
 
 const CREATOR_NOTICES = {
-  accepted: (id) => `✅ <@${id}> a validé sa présence. Tu peux envoyer la session.`,
-  refused: (id) => `❌ <@${id}> n'est pas disponible. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
+  accepted: (id) => `${EMOJI.SUCCES} <@${id}> a validé sa présence. Tu peux envoyer la session.`,
+  refused: (id) => `${EMOJI.ERREUR} <@${id}> n'est pas disponible. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
   expired: (id) =>
-    `⌛ <@${id}> n'a pas répondu dans les 10 minutes : demande refusée. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
+    `${EMOJI.EXPIRE} <@${id}> n'a pas répondu dans les 10 minutes : demande refusée. Sélectionne un autre superviseur via « Sélectionner un superviseur ».`,
 };
 
 /** Prévient le créateur de la réponse du superviseur. */

@@ -8,6 +8,7 @@ const { canManageSession, findSession } = require('../atm/service');
 const { buildPdsEditModal } = require('../atm/sessionModals');
 const { ephemeralText, textMessage } = require('../utils/v2');
 const { logAction, who } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /**
  * Charge la PDS et sa session ; seuls le CO-ATM de la session et la direction peuvent la modifier,
@@ -18,9 +19,9 @@ async function loadEditablePds(interaction, id) {
   const session = pds ? await findSession(String(pds.sessionId)) : null;
 
   let error = null;
-  if (!pds || !session) error = '❌ Cette PDS est introuvable.';
-  else if (!canManageSession(interaction, session)) error = '⛔ Seuls le CO-ATM de la session et la direction peuvent modifier cette PDS.';
-  else if (session.status !== 'in_progress') error = "❌ La session n'est plus active : la modification n'est pas possible.";
+  if (!pds || !session) error = `${EMOJI.ERREUR} Cette PDS est introuvable.`;
+  else if (!canManageSession(interaction, session)) error = `${EMOJI.INTERDIT} Seuls le CO-ATM de la session et la direction peuvent modifier cette PDS.`;
+  else if (session.status !== 'in_progress') error = `${EMOJI.ERREUR} La session n'est plus active : la modification n'est pas possible.`;
 
   if (error) {
     await interaction.reply(ephemeralText(error));
@@ -44,10 +45,10 @@ async function handlePdsEditModal(interaction, [id]) {
   const mallettes = Number(interaction.fields.getStringSelectValues(FIELDS.mallettes)[0]);
   const [attachment] = getUploadedFiles(interaction, FIELDS.photo);
   if (!Number.isInteger(mallettes) || mallettes < 1 || mallettes > MAX_MALLETTES) {
-    return interaction.reply(ephemeralText('❌ Nombre de mallettes invalide.'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Nombre de mallettes invalide.`));
   }
   if (attachment && !attachment.contentType?.startsWith('image/')) {
-    return interaction.reply(ephemeralText('❌ Le fichier envoyé doit être une image.'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le fichier envoyé doit être une image.`));
   }
 
   // L'envoi de la photo sur Cloudinary peut dépasser les 3 secondes accordées par Discord.
@@ -59,34 +60,34 @@ async function handlePdsEditModal(interaction, [id]) {
     logAction('PDS', `PDS n°${pds.number} modifiée par ${who(interaction)} (${mallettes} mallette(s)${attachment ? ', nouvelle photo' : ''})`);
   } catch (error) {
     console.error('[PDS] Modification impossible :', error);
-    return interaction.followUp(ephemeralText(`❌ Impossible de modifier la PDS : ${error.message}`));
+    return interaction.followUp(ephemeralText(`${EMOJI.ERREUR} Impossible de modifier la PDS : ${error.message}`));
   }
 
   await interaction.editReply(renderPdsMessage(pds, session));
-  return interaction.followUp(ephemeralText('✅ PDS modifiée.'));
+  return interaction.followUp(ephemeralText(`${EMOJI.SUCCES} PDS modifiée.`));
 }
 
 /** « Oui, supprimer la PDS » (menu contextuel « Supprimer la PDS ») : base de données, photo et message. */
 async function handlePdsDeleteButton(interaction, [id]) {
   const pds = isValidObjectId(id) ? await PdsAtm.findById(id) : null;
-  if (!pds) return interaction.update(textMessage('ℹ️ Cette PDS a déjà été supprimée.'));
+  if (!pds) return interaction.update(textMessage(`${EMOJI.INFO} Cette PDS a déjà été supprimée.`));
   const session = await findSession(String(pds.sessionId));
   if (session && !canManageSession(interaction, session)) {
-    return interaction.reply(ephemeralText('⛔ Seuls le CO-ATM de la session et la direction peuvent supprimer cette PDS.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seuls le CO-ATM de la session et la direction peuvent supprimer cette PDS.`));
   }
 
   // Suppression atomique en base (évite une double suppression), puis photo et message.
   const deleted = await PdsAtm.findOneAndDelete({ _id: pds._id });
-  if (!deleted) return interaction.update(textMessage('ℹ️ Cette PDS a déjà été supprimée.'));
+  if (!deleted) return interaction.update(textMessage(`${EMOJI.INFO} Cette PDS a déjà été supprimée.`));
   await interaction.deferUpdate();
   logAction('BDD', `Suppression dans Session-ATM-PDS : PDS ${deleted._id} (n°${deleted.number}) par ${who(interaction)}`);
   await deletePdsContent(interaction.client, deleted);
-  return interaction.editReply(textMessage(`🗑️ PDS n°${String(deleted.number).padStart(2, '0')} supprimée.`));
+  return interaction.editReply(textMessage(`${EMOJI.SUPPRESSION} PDS n°${String(deleted.number).padStart(2, '0')} supprimée.`));
 }
 
 /** « Annuler » : la PDS n'est pas supprimée. */
 async function handlePdsDeleteCancel(interaction) {
-  return interaction.update(textMessage('↩️ Suppression annulée.'));
+  return interaction.update(textMessage(`${EMOJI.RETOUR} Suppression annulée.`));
 }
 
 module.exports = { handlePdsEditButton, handlePdsEditModal, handlePdsDeleteButton, handlePdsDeleteCancel };

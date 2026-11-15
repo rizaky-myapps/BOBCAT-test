@@ -3,8 +3,9 @@ const AtmSession = require('../models/AtmSession');
 const { renderProgramReminder, unprogramSession } = require('../atm/programmed');
 const { ephemeralText, textMessage } = require('../utils/v2');
 const { logAction, who } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
-const NOT_PROGRAMMED = "ℹ️ Cette session n'est plus programmée (déjà postée ou déprogrammée).";
+const NOT_PROGRAMMED = `${EMOJI.INFO} Cette session n'est plus programmée (déjà postée ou déprogrammée).`;
 
 /**
  * « Déprogrammer » : la session programmée est supprimée et ne sera jamais postée.
@@ -14,7 +15,7 @@ async function handleUnprogramButton(interaction, [id, source]) {
   const session = isValidObjectId(id) ? await AtmSession.findById(id) : null;
   if (!session || session.status !== 'scheduled') return interaction.reply(ephemeralText(NOT_PROGRAMMED));
   if (session.creatorId !== interaction.user.id) {
-    return interaction.reply(ephemeralText('⛔ Seul le CO-ATM qui a programmé cette session peut la déprogrammer.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seul le CO-ATM qui a programmé cette session peut la déprogrammer.`));
   }
 
   const deleted = await unprogramSession(interaction.client, session._id, interaction.user.id);
@@ -22,7 +23,7 @@ async function handleUnprogramButton(interaction, [id, source]) {
 
   // Le rappel du salon CO-ATM est mis à jour par unprogramSession.
   if (source === 'reminder') return interaction.deferUpdate();
-  return interaction.update(textMessage('🗑️ Session déprogrammée : elle ne sera pas postée.'));
+  return interaction.update(textMessage(`${EMOJI.SUPPRESSION} Session déprogrammée : elle ne sera pas postée.`));
 }
 
 /** « Je veux toujours la faire » (rappel du salon CO-ATM). */
@@ -30,7 +31,7 @@ async function handleProgramConfirmButton(interaction, [id]) {
   const session = isValidObjectId(id) ? await AtmSession.findById(id) : null;
   if (!session || session.status !== 'scheduled') return interaction.reply(ephemeralText(NOT_PROGRAMMED));
   if (session.creatorId !== interaction.user.id) {
-    return interaction.reply(ephemeralText('⛔ Seul le CO-ATM qui a programmé cette session peut répondre.'));
+    return interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seul le CO-ATM qui a programmé cette session peut répondre.`));
   }
 
   const updated = await AtmSession.findOneAndUpdate(

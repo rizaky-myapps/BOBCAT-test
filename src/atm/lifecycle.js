@@ -6,6 +6,7 @@ const { closeStartCheck } = require('./startCheck');
 const { toUnix } = require('../utils/date');
 const { textMessage } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const AFTER = { returnDocument: 'after' };
 
@@ -27,7 +28,7 @@ async function cancelSession(client, sessionId, { reason, details = null, by = n
   await closeStartCheck(
     client,
     session,
-    by ? `❌ **Session annulée** par <@${by}>.` : '⌛ **Session non commencée dans les 10 minutes : annulée.**',
+    by ? `${EMOJI.STATUT_ANNULEE} **Session annulée** par <@${by}>.` : `${EMOJI.EXPIRE} **Session non commencée dans les 10 minutes : annulée.**`,
   );
   await moveToBasket(session);
   return session;
@@ -44,7 +45,7 @@ async function startSession(client, sessionId) {
   logAction('Session', `Session ${session._id} commencée`);
 
   await syncSessionMessage(client, session);
-  await closeStartCheck(client, session, '▶️ **Session commencée.**');
+  await closeStartCheck(client, session, `${EMOJI.SESSION_COMMENCEE} **Session commencée.**`);
   return session;
 }
 
@@ -79,7 +80,7 @@ async function notifyVoters(client, session) {
   if (!session.available.length) return;
   const ts = toUnix(session.scheduledAt);
   const text = [
-    '## ❌ Session ATM annulée',
+    `## ${EMOJI.STATUT_ANNULEE} Session ATM annulée`,
     `La session prévue le <t:${ts}:d> à <t:${ts}:t> n'a pas commencé à temps : elle est annulée.`,
     '',
     session.available.map((userId) => `<@${userId}>`).join(' '),

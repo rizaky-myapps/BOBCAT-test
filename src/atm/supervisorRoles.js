@@ -4,6 +4,7 @@ const { config } = require('../config');
 const { SUPERVISOR_ROLE_GRACE } = require('./constants');
 const { sendLog } = require('../utils/logs');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 /** Membre du serveur, ou null s'il l'a quitté. Renvoie undefined si on ne peut pas savoir. */
 async function resolveMember(guild, userId) {
@@ -48,7 +49,7 @@ async function checkSupervisorRoles(client) {
       const name = member?.displayName ?? supervisor.name;
       await sendLog(
         client,
-        `📋 **Liste des superviseurs**\n<@${supervisor.userId}>${name ? ` (${name})` : ''} ne fait plus partie de la liste des superviseurs : il n'a plus le rôle CO-ATM.`,
+        `${EMOJI.LISTE_SUPERVISEURS} **Liste des superviseurs**\n<@${supervisor.userId}>${name ? ` (${name})` : ''} ne fait plus partie de la liste des superviseurs : il n'a plus le rôle CO-ATM.`,
       );
     }
   }

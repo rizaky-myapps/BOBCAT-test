@@ -31,11 +31,12 @@ const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision'
 const { formatDateTime, getUpcomingDays, parseDateTime, toUnix } = require('../utils/date');
 const { ephemeralText, textMessage } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
+const EMOJI = require('../emoji');
 
 const isIn = (list, value) => list.some((item) => item.value === value);
 
-const NO_DATE_MESSAGE = "📅 Choisis d'abord la date et l'heure de la session.";
-const NO_RADIO_MESSAGE = '❌ Toutes les radios sont déjà utilisées par une autre session à ce moment-là : choisis une autre heure.';
+const NO_DATE_MESSAGE = `${EMOJI.DATE} Choisis d'abord la date et l'heure de la session.`;
+const NO_RADIO_MESSAGE = `${EMOJI.ERREUR} Toutes les radios sont déjà utilisées par une autre session à ce moment-là : choisis une autre heure.`;
 
 /**
  * Radio / véhicule du brouillon déjà pris par une autre session à cette heure-là : ils sont retirés du
@@ -45,28 +46,28 @@ async function releaseUsedResources(draft, notices) {
   if (!draft.scheduledAt) return;
   const used = await getUsedResources(draft.guildId, draft.scheduledAt);
   if (draft.radio && used.radios.has(draft.radio)) {
-    notices.push('❌ La radio choisie est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.');
+    notices.push(`${EMOJI.ERREUR} La radio choisie est déjà utilisée par une autre session à ce moment-là : choisis-en une autre.`);
     draft.radio = null;
   }
   if (draft.vehicle && isVehicleUsed(used, resolveVehicle(draft.vehicle, draft.plate))) {
-    notices.push('❌ Le véhicule choisi est déjà utilisé par une autre session à ce moment-là : choisis-en un autre.');
+    notices.push(`${EMOJI.ERREUR} Le véhicule choisi est déjà utilisé par une autre session à ce moment-là : choisis-en un autre.`);
     draft.vehicle = null;
     draft.plate = '';
   }
 }
 
 const LOCKED_MESSAGE =
-  '⏳ En attente de la réponse du superviseur : les informations ne sont pas modifiables pour le moment.';
+  `${EMOJI.ATTENTE} En attente de la réponse du superviseur : les informations ne sont pas modifiables pour le moment.`;
 
 /** Charge le brouillon de l'aperçu ; seul son créateur peut le modifier. */
 async function loadDraft(interaction, id) {
   const draft = isValidObjectId(id) ? await AtmDraft.findById(id) : null;
   if (!draft) {
-    await interaction.reply(ephemeralText('❌ Cet aperçu a expiré. Relance la commande `/atm`.'));
+    await interaction.reply(ephemeralText(`${EMOJI.ERREUR} Cet aperçu a expiré. Relance la commande \`/atm\`.`));
     return null;
   }
   if (draft.userId !== interaction.user.id) {
-    await interaction.reply(ephemeralText('⛔ Seul le créateur de la session peut la modifier.'));
+    await interaction.reply(ephemeralText(`${EMOJI.INTERDIT} Seul le créateur de la session peut la modifier.`));
     return null;
   }
   return draft;
@@ -81,7 +82,7 @@ async function updatePreview(interaction, draft) {
 /** Message d'erreur si le superviseur est déjà sur une session qui chevauche `scheduledAt`, sinon null. */
 async function checkSupervisorAvailability(guildId, supervisorId, scheduledAt) {
   const [conflict] = await findConflictingSessions(guildId, supervisorId, scheduledAt);
-  return conflict ? `❌ <@${supervisorId}> est déjà sur une session à ce moment-là : ${sessionUrl(conflict)}` : null;
+  return conflict ? `${EMOJI.ERREUR} <@${supervisorId}> est déjà sur une session à ce moment-là : ${sessionUrl(conflict)}` : null;
 }
 
 /** Superviseurs enregistrés en base, au format des options d'un menu (25 max). */
@@ -107,12 +108,12 @@ async function sendRequestIfReady(interaction, draft, notices) {
   try {
     draft.supervisorRequest = await sendSupervisionRequest(interaction.client, draft);
     notices.push(
-      `📨 Demande envoyée à <@${draft.supervisorId}> dans <#${draft.supervisorRequest.channelId}>.`,
+      `${EMOJI.ENVOI} Demande envoyée à <@${draft.supervisorId}> dans <#${draft.supervisorRequest.channelId}>.`,
       "Les informations ne sont plus modifiables jusqu'à sa réponse (10 minutes maximum).",
     );
   } catch (error) {
     console.error('[Supervision] Envoi de la demande impossible :', error);
-    notices.push(`❌ Impossible d'envoyer la demande au superviseur : ${error.message}.`);
+    notices.push(`${EMOJI.ERREUR} Impossible d'envoyer la demande au superviseur : ${error.message}.`);
   }
 }
 
@@ -155,14 +156,14 @@ async function handleInfoModal(interaction, [id]) {
   const used = await getUsedResources(draft.guildId, draft.scheduledAt);
   const choices = getAvailableChoices(used);
   if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle)) {
-    return interaction.reply(ephemeralText('❌ Réponses invalides, réessaie.'));
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Réponses invalides, réessaie.`));
   }
   const plateError = vehicle === VEHICLE_OTHER ? getPlateError(rawPlate) : null;
   if (plateError) return interaction.reply(ephemeralText(`${plateError} Aucune modification enregistrée.`));
   if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle)) {
     return interaction.reply(
       ephemeralText(
-        '❌ Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là. Aucune modification enregistrée.',
+        `${EMOJI.ERREUR} Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là. Aucune modification enregistrée.`,
       ),
     );
   }
@@ -170,7 +171,7 @@ async function handleInfoModal(interaction, [id]) {
   if (isVehicleUsed(used, resolveVehicle(vehicle, plate))) {
     return interaction.reply(
       ephemeralText(
-        `❌ La plaque \`${plate}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre. Aucune modification enregistrée.`,
+        `${EMOJI.ERREUR} La plaque \`${plate}\` est déjà utilisée par une autre session à ce moment-là : choisis-en une autre. Aucune modification enregistrée.`,
       ),
     );
   }
@@ -212,7 +213,7 @@ async function handleDateModal(interaction, [id]) {
   const rawDate = `${dd}/${mm}/${yyyy} ${hour}:${minute}`;
   const scheduledAt =
     isIn(HOUR_CHOICES, hour) && isIn(MINUTE_CHOICES, minute) ? parseDateTime(rawDate, config.timezone) : null;
-  if (!scheduledAt) return interaction.reply(ephemeralText('❌ Date invalide, réessaie.'));
+  if (!scheduledAt) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Date invalide, réessaie.`));
 
   // Au moins 10 min à l'avance, et pas pendant une autre session du créateur.
   const dateError = await checkSessionDate(draft.guildId, draft.userId, scheduledAt);
@@ -247,10 +248,10 @@ async function handleDateModal(interaction, [id]) {
 
 /** Message d'erreur si le superviseur ne peut pas (ou plus) être choisi, sinon null. */
 function supervisorChoiceError(interaction, draft) {
-  if (isCoAtm(interaction.member)) return "ℹ️ Tu as le rôle CO ATM : tu n'as pas besoin de superviseur.";
+  if (isCoAtm(interaction.member)) return `${EMOJI.INFO} Tu as le rôle CO ATM : tu n'as pas besoin de superviseur.`;
   if (!draft.scheduledAt) return NO_DATE_MESSAGE;
   if (isRequestPending(draft)) return LOCKED_MESSAGE;
-  if (getConfirmedSupervisorId(draft)) return '🔒 Ton superviseur a validé sa présence : il ne peut plus être changé.';
+  if (getConfirmedSupervisorId(draft)) return `${EMOJI.VERROUILLE} Ton superviseur a validé sa présence : il ne peut plus être changé.`;
   return null;
 }
 
@@ -263,7 +264,7 @@ async function handleSupervisorButton(interaction, [id]) {
   const supervisors = await getSupervisorChoices(interaction.guild);
   if (!supervisors.length) {
     return interaction.reply(
-      ephemeralText('❌ Aucun superviseur enregistré. Utilise la commande `/superviseur` pour en ajouter.'),
+      ephemeralText(`${EMOJI.ERREUR} Aucun superviseur enregistré. Utilise la commande \`/superviseur\` pour en ajouter.`),
     );
   }
   return interaction.showModal(buildSupervisorChoiceModal(draft, supervisors));
@@ -276,7 +277,7 @@ async function handleSupervisorModal(interaction, [id]) {
   if (error) return interaction.reply(ephemeralText(error));
 
   const [supervisorId] = interaction.fields.getStringSelectValues(FIELDS.supervisor);
-  if (!supervisorId) return interaction.reply(ephemeralText('❌ Réponse invalide, réessaie.'));
+  if (!supervisorId) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Réponse invalide, réessaie.`));
 
   // Le superviseur ne peut pas être sur deux sessions en même temps.
   if (draft.scheduledAt) {
@@ -313,7 +314,7 @@ async function handleSendButton(interaction, [id]) {
   if (!isDraftComplete(draft, interaction.guild)) {
     return interaction.reply(
       ephemeralText(
-        "❌ Complète toutes les informations avant d'envoyer la session (et attends la validation du superviseur).",
+        `${EMOJI.ERREUR} Complète toutes les informations avant d'envoyer la session (et attends la validation du superviseur).`,
       ),
     );
   }
@@ -360,18 +361,18 @@ async function handleSendButton(interaction, [id]) {
       const publish = toUnix(session.publishAt);
       await interaction.editReply(
         textMessage(
-          `📅 **Session programmée** pour le <t:${ts}:d> à <t:${ts}:t>.\nElle sera postée automatiquement <t:${publish}:R> (à <t:${publish}:t>), 1h45 avant son début.`,
+          `${EMOJI.STATUT_PROGRAMMEE} **Session programmée** pour le <t:${ts}:d> à <t:${ts}:t>.\nElle sera postée automatiquement <t:${publish}:R> (à <t:${publish}:t>), 1h45 avant son début.`,
         ),
       );
       return;
     }
     const { message } = await publishSession(interaction, claimed);
-    await interaction.editReply(textMessage(`✅ Session ATM publiée dans <#${message.channelId}> : ${message.url}`));
+    await interaction.editReply(textMessage(`${EMOJI.SUCCES} Session ATM publiée dans <#${message.channelId}> : ${message.url}`));
   } catch (error) {
     console.error('[ATM] Publication impossible :', error);
     await AtmDraft.create(claimed.toObject()).catch(() => null);
     logAction('BDD', `Création dans Session-ATM-Draft : brouillon ${claimed._id} restauré (publication impossible)`);
-    await interaction.followUp(ephemeralText(`❌ Impossible de publier la session : ${error.message}`));
+    await interaction.followUp(ephemeralText(`${EMOJI.ERREUR} Impossible de publier la session : ${error.message}`));
   }
 }
 
