@@ -12,6 +12,7 @@ const { checkDispatchDeadlines, sendDispatchReminders } = require('./atm/reminde
 const { sendStartChecks } = require('./atm/startCheck');
 const { expirePendingRequests } = require('./atm/supervision');
 const { checkSupervisorRoles } = require('./atm/supervisorRoles');
+const { isDatabaseConnected, isNetworkError } = require('./database/mongoose');
 const { logAction } = require('./utils/logger');
 
 /** Supprime les brouillons non envoyés créés il y a plus de 5h. */
@@ -20,9 +21,18 @@ async function deleteExpiredDrafts() {
   if (deletedCount) logAction('BDD', `Suppression dans Session-ATM-Draft : ${deletedCount} brouillon(s) non envoyé(s) depuis 5h`);
 }
 
-/** Lance une tâche immédiatement puis à intervalle régulier, en journalisant ses erreurs. */
+/**
+ * Lance une tâche immédiatement puis à intervalle régulier, en journalisant ses erreurs.
+ * Base injoignable : la tâche est sautée et reprend au passage suivant, une fois reconnectée.
+ */
 function every(interval, name, task) {
-  const run = () => task().catch((error) => console.error(`[${name}] Erreur :`, error));
+  const run = () => {
+    if (!isDatabaseConnected()) return;
+    task().catch((error) => {
+      if (isNetworkError(error)) console.warn(`[${name}] Base de données injoignable : ${error.message}`);
+      else console.error(`[${name}] Erreur :`, error);
+    });
+  };
   run();
   return setInterval(run, interval);
 }
