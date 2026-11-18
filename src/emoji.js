@@ -1,9 +1,7 @@
 const fs = require('node:fs');
-const path = require('node:path');
 const dotenv = require('dotenv');
-
-/** Fichier des émojis (format .env : CLE=émoji), à la racine du projet. */
-const FILE = path.join(__dirname, '..', 'emoji.txt');
+const { ensureLocalFile } = require('./utils/localFile');
+const { logAction } = require('./utils/logger');
 
 const KEYS = [
   // Statuts des sessions
@@ -69,17 +67,31 @@ const KEYS = [
   'SESSION_ANNULEE',
 ];
 
-/** Lit emoji.txt : toutes les clés doivent être renseignées, sinon le bot ne démarre pas. */
-function loadEmojis() {
-  let values;
+/** Lit un fichier au format .env. */
+function parseFile(file) {
   try {
-    values = dotenv.parse(fs.readFileSync(FILE));
+    return dotenv.parse(fs.readFileSync(file));
   } catch (error) {
-    throw new Error(`Fichier des émojis illisible (${FILE}) : ${error.message}`);
+    throw new Error(`Fichier des émojis illisible (${file}) : ${error.message}`);
   }
-  const missing = KEYS.filter((key) => !values[key]?.trim());
+}
+
+/**
+ * Lit emoji.txt (format .env : CLE=émoji, à la racine du projet, non suivi par git).
+ * Une clé absente ou vide prend la valeur par défaut de emoji.example.txt.
+ */
+function loadEmojis() {
+  const { file, example } = ensureLocalFile('emoji.txt', 'emoji.example.txt');
+  const values = parseFile(file);
+  const defaults = parseFile(example);
+
+  const fromDefaults = KEYS.filter((key) => !values[key]?.trim());
+  const missing = fromDefaults.filter((key) => !defaults[key]?.trim());
   if (missing.length) throw new Error(`Émojis manquants dans emoji.txt : ${missing.join(', ')}`);
-  return Object.freeze(Object.fromEntries(KEYS.map((key) => [key, values[key].trim()])));
+  if (fromDefaults.length) {
+    logAction('Config', `emoji.txt : valeur par défaut (emoji.example.txt) utilisée pour ${fromDefaults.join(', ')}`);
+  }
+  return Object.freeze(Object.fromEntries(KEYS.map((key) => [key, (values[key]?.trim() || defaults[key]).trim()])));
 }
 
 module.exports = loadEmojis();

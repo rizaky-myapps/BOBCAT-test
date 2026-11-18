@@ -1,5 +1,6 @@
 const fs = require('node:fs');
-const path = require('node:path');
+const { ensureLocalFile } = require('../utils/localFile');
+const { logAction } = require('../utils/logger');
 const atm = require('./atm');
 const superviseur = require('./superviseur');
 const supprimerPds = require('./supprimerPds');
@@ -8,20 +9,34 @@ const patrouille = require('./patrouille');
 /** Commandes du bot : commandes slash et commande du menu contextuel des messages. */
 const ALL_COMMANDS = [atm, superviseur, supprimerPds, patrouille];
 
-/** Fichier de configuration (à la racine du projet) : « commands » → nom de la commande : true / false. */
-const FILE = path.join(__dirname, '..', '..', 'config.json');
-
-/** Lit config.json : chaque commande doit y être activée (true) ou désactivée (false), sinon le bot ne démarre pas. */
-function loadCommandSettings() {
-  let settings;
+/** Section « commands » d'un fichier de configuration JSON. */
+function readCommands(file) {
   try {
-    settings = JSON.parse(fs.readFileSync(FILE, 'utf8')).commands;
+    return JSON.parse(fs.readFileSync(file, 'utf8')).commands ?? {};
   } catch (error) {
-    throw new Error(`Fichier config.json illisible (${FILE}) : ${error.message}`);
+    throw new Error(`Fichier de configuration illisible (${file}) : ${error.message}`);
   }
-  const invalid = ALL_COMMANDS.map((command) => command.data.name).filter((name) => typeof settings?.[name] !== 'boolean');
+}
+
+/**
+ * Lit config.json (à la racine du projet, non suivi par git) : « commands » → nom de la commande : true / false.
+ * Une commande absente prend la valeur par défaut de config.example.json ; une autre valeur que true / false
+ * empêche le bot de démarrer.
+ */
+function loadCommandSettings() {
+  const { file, example } = ensureLocalFile('config.json', 'config.example.json');
+  const local = readCommands(file);
+  const defaults = readCommands(example);
+  const names = ALL_COMMANDS.map((command) => command.data.name);
+
+  const fromDefaults = names.filter((name) => !(name in local));
+  const settings = Object.fromEntries(names.map((name) => [name, name in local ? local[name] : defaults[name]]));
+  const invalid = names.filter((name) => typeof settings[name] !== 'boolean');
   if (invalid.length) {
     throw new Error(`config.json : indique true ou false dans « commands » pour : ${invalid.join(', ')}`);
+  }
+  if (fromDefaults.length) {
+    logAction('Config', `config.json : valeur par défaut (config.example.json) utilisée pour ${fromDefaults.join(', ')}`);
   }
   return settings;
 }
