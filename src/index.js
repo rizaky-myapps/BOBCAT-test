@@ -9,7 +9,8 @@ const { deployCommands } = require('./commands/deploy');
 const { startJobs } = require('./jobs');
 const { logAction } = require('./utils/logger');
 
-// GuildMembers (intent privilégié) : nécessaire pour lister les membres ayant le rôle superviseur (/superviseur).
+// GuildMembers (intent privilégié) : nécessaire pour lister les membres ayant le rôle superviseur (/gestion → Superviseur ATM)
+// et les employés (/patrouille).
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
 /** Met en cache les membres des serveurs (le cache reste ensuite à jour grâce à l'intent GuildMembers). */

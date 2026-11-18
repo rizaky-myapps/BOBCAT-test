@@ -1,6 +1,6 @@
 const { Schema, model } = require('mongoose');
 
-/** Superviseurs proposés dans la question « Choix du superviseur » de /atm (gérés via /superviseur). */
+/** Superviseurs proposés dans la question « Choix du superviseur » de /atm (gérés via /gestion → Superviseur ATM). */
 const supervisorSchema = new Schema(
   {
     guildId: { type: String, required: true },

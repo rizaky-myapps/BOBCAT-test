@@ -2,12 +2,12 @@ const fs = require('node:fs');
 const { ensureLocalFile } = require('../utils/localFile');
 const { logAction } = require('../utils/logger');
 const atm = require('./atm');
-const superviseur = require('./superviseur');
 const supprimerPds = require('./supprimerPds');
 const patrouille = require('./patrouille');
+const gestion = require('./gestion');
 
 /** Commandes du bot : commandes slash et commande du menu contextuel des messages. */
-const ALL_COMMANDS = [atm, superviseur, supprimerPds, patrouille];
+const ALL_COMMANDS = [atm, supprimerPds, patrouille, gestion];
 
 /** Section « commands » d'un fichier de configuration JSON. */
 function readCommands(file) {

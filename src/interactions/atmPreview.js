@@ -289,7 +289,7 @@ async function handleSupervisorButton(interaction, [id]) {
   const supervisors = await getSupervisorChoices(interaction.guild);
   if (!supervisors.length) {
     return interaction.reply(
-      ephemeralText(`${EMOJI.ERREUR} Aucun superviseur enregistré. Utilise la commande \`/superviseur\` pour en ajouter.`),
+      ephemeralText(`${EMOJI.ERREUR} Aucun superviseur enregistré. Ajoute-en via \`/gestion\` → « Superviseur ATM ».`),
     );
   }
   return interaction.showModal(buildSupervisorChoiceModal(draft, supervisors));

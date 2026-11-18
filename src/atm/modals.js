@@ -100,7 +100,7 @@ function buildSupervisorChoiceModal(draft, supervisors) {
 }
 
 /**
- * Modal de /superviseur : liste des membres ayant le rôle superviseur.
+ * Modal « Superviseur ATM » de /gestion : liste des membres ayant le rôle superviseur.
  * Les superviseurs déjà enregistrés sont pré-sélectionnés.
  * @param {{ label: string, value: string, description?: string, default: boolean }[]} options
  * @param {string} roleName

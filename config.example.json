@@ -1,8 +1,8 @@
 {
   "commands": {
     "atm": true,
-    "superviseur": true,
     "Supprimer la PDS": true,
-    "patrouille": true
+    "patrouille": true,
+    "gestion": true
   }
 }

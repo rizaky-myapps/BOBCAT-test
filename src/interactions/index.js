@@ -7,6 +7,7 @@ const { handleProgramConfirmButton, handleUnprogramButton } = require('./program
 const { handleAvailableButton, handleManageButton } = require('./atmSession');
 const { handleSupervisorAccept, handleSupervisorModal, handleSupervisorRefuse } = require('./supervisor');
 const { handlePatrolModal } = require('./patrouille');
+const gestion = require('./gestion');
 const { ephemeralText } = require('../utils/v2');
 const { logInteraction } = require('../utils/logger');
 const EMOJI = require('../emoji');
@@ -62,13 +63,34 @@ const componentHandlers = {
   'pds:editsub': handlePdsEditModal,
   'pds:del': handlePdsDeleteButton,
   'pds:delno': handlePdsDeleteCancel,
-  // /superviseur
+  // /gestion → Superviseur ATM
   'sup:save': handleSupervisorModal,
   // Demande de supervision (salon CO-ATM)
   'sup:accept': handleSupervisorAccept,
   'sup:refuse': handleSupervisorRefuse,
   // /patrouille
   'patrouille:sub': handlePatrolModal,
+  // /gestion
+  'ges:lieux': gestion.handleMenuPlaces,
+  'ges:vehicules': gestion.handleMenuVehicles,
+  'ges:sup': gestion.handleMenuSupervisors,
+  'ges:sep': gestion.handleMenuSeparators,
+  'ges:upr': gestion.handleMenuUpr,
+  'veh:page': gestion.handleVehiclePage,
+  'veh:add': gestion.handleVehicleAddButton,
+  'veh:addsub': gestion.handleVehicleAddModal,
+  'veh:edit': gestion.handleVehicleEditButton,
+  'veh:editsub': gestion.handleVehicleEditModal,
+  'veh:del': gestion.handleVehicleDeleteButton,
+  'veh:delsub': gestion.handleVehicleDeleteModal,
+  'lieu:add': gestion.handlePlaceAddButton,
+  'lieu:addsub': gestion.handlePlaceAddModal,
+  'lieu:del': gestion.handlePlaceDeleteButton,
+  'lieu:delsub': gestion.handlePlaceDeleteModal,
+  'sep:add': gestion.handleSeparatorAddButton,
+  'sep:addsub': gestion.handleSeparatorAddModal,
+  'sep:del': gestion.handleSeparatorDeleteButton,
+  'sep:delsub': gestion.handleSeparatorDeleteModal,
 };
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

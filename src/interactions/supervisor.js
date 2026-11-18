@@ -9,7 +9,7 @@ const { ephemeralText } = require('../utils/v2');
 const { logAction, who } = require('../utils/logger');
 const EMOJI = require('../emoji');
 
-/** Soumission du modal /superviseur : la sélection devient la liste des superviseurs en base. */
+/** Soumission du modal « Superviseur ATM » (/gestion) : la sélection devient la liste des superviseurs en base. */
 async function handleSupervisorModal(interaction) {
   const { guild, guildId } = interaction;
   const roleId = config.roles.coAtm;
