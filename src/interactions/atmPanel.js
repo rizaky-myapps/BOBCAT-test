@@ -11,7 +11,6 @@ const {
   RADIOS,
   START_EARLY_WINDOW,
   TENUES,
-  VEHICLES,
   VEHICLE_OTHER,
 } = require('../atm/constants');
 const { cancelSession, finishSession, startSession } = require('../atm/lifecycle');
@@ -33,15 +32,18 @@ const {
   findSession,
   getAgentSlots,
   getDispatchedAgents,
+  getAtmVehicles,
   getAvailableChoices,
   getMinAgents,
   getPlateError,
   getUsedResources,
   hasRole,
   isBiker,
+  isKnownPlate,
   isVehicleUsed,
   resolveVehicle,
   syncSessionMessage,
+  unknownPlateMessage,
 } = require('../atm/service');
 const { renderStartCheck } = require('../atm/startCheck');
 const { isCloudinaryEnabled } = require('../services/cloudinary');
@@ -414,7 +416,7 @@ async function handleInfoButton(interaction, [id]) {
   const session = await loadManageable(interaction, id, 'pending');
   if (!session) return;
   // Les radios et véhicules utilisés par une autre session à la même heure ne sont pas proposés.
-  const choices = getAvailableChoices(await getUsedResources(session.guildId, session.scheduledAt, session._id));
+  const choices = await getAvailableChoices(session.guildId, await getUsedResources(session.guildId, session.scheduledAt, session._id));
   if (!choices.radios.length) {
     return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Toutes les radios sont déjà utilisées par une autre session à ce moment-là.`));
   }
@@ -433,11 +435,16 @@ async function handleInfoModal(interaction, [id]) {
   const vehicle = resolveVehicle(vehicleChoice, rawPlate);
 
   const used = await getUsedResources(session.guildId, session.scheduledAt, session._id);
-  const choices = getAvailableChoices(used);
+  const choices = await getAvailableChoices(session.guildId, used);
+  const isOther = vehicleChoice === VEHICLE_OTHER;
+  const atmVehicles = await getAtmVehicles(session.guildId);
 
   let error = null;
-  if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || !isIn(VEHICLES, vehicleChoice)) error = `${EMOJI.ERREUR} Réponses invalides.`;
-  else if (vehicleChoice === VEHICLE_OTHER && getPlateError(rawPlate)) error = getPlateError(rawPlate);
+  if (!isIn(RADIOS, radio) || !isIn(TENUES, tenue) || (!isOther && !isIn(atmVehicles, vehicleChoice))) {
+    error = `${EMOJI.ERREUR} Réponses invalides.`;
+  } else if (isOther && getPlateError(rawPlate)) error = getPlateError(rawPlate);
+  // « Autre » : la plaque doit être celle d'un véhicule de la base (/gestion → Véhicules).
+  else if (isOther && !(await isKnownPlate(session.guildId, rawPlate))) error = unknownPlateMessage(rawPlate);
   else if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicleChoice)) {
     error = `${EMOJI.ERREUR} Cette radio ou ce véhicule est déjà utilisé par une autre session à ce moment-là.`;
   } else if (isVehicleUsed(used, vehicle)) {

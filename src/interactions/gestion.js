@@ -2,6 +2,7 @@ const { isValidObjectId } = require('mongoose');
 const Vehicle = require('../models/Vehicle');
 const PatrolPlace = require('../models/PatrolPlace');
 const SeparatorChannel = require('../models/SeparatorChannel');
+const SeparatorText = require('../models/SeparatorText');
 const vehicles = require('../gestion/vehicles');
 const places = require('../gestion/places');
 const separators = require('../gestion/separators');
@@ -36,30 +37,39 @@ const updateVehiclePanel = async (interaction, options) =>
 
 const handleVehiclePage = (interaction, [page]) => updateVehiclePanel(interaction, { page: Number(page) });
 
-const handleVehicleAddButton = (interaction, [page]) => interaction.showModal(vehicles.buildAddModal(page));
+async function handleVehicleAddButton(interaction, [page]) {
+  const names = vehicles.groupVehicles(await Vehicle.find({ guildId: interaction.guildId })).map((group) => group.name);
+  return interaction.showModal(vehicles.buildAddModal(page, names));
+}
 
 async function handleVehicleAddModal(interaction, [page]) {
   const { fields } = interaction;
-  const rawName = normalizeSpaces(fields.getTextInputValue(vehicles.FIELDS.name));
+  const [nameChoice] = fields.getStringSelectValues(vehicles.FIELDS.name);
+  const isOther = nameChoice === vehicles.NAME_OTHER;
+  const rawName = isOther ? normalizeSpaces(fields.getTextInputValue(vehicles.FIELDS.otherName)) : normalizeSpaces(nameChoice);
   const plate = vehicles.normalizePlate(fields.getTextInputValue(vehicles.FIELDS.plate));
   const km = vehicles.parseKm(fields.getTextInputValue(vehicles.FIELDS.km));
+  const [tag = null] = fields.fields.get(vehicles.FIELDS.tag)?.values ?? [];
 
-  if (!rawName) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Renseigne le nom du véhicule.`));
+  if (!rawName) {
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Tu as choisi « Autre » : écris le nom du véhicule dans le champ prévu.`));
+  }
   const plateError = vehicles.getPlateError(plate);
   if (plateError) return interaction.reply(ephemeralText(plateError));
   if (km === null) return interaction.reply(ephemeralText(vehicles.KM_ERROR));
+  if (tag && !vehicles.TAGS.some((item) => item.value === tag)) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Tag invalide.`));
 
   // Même nom qu'un véhicule existant (majuscules / accents près) : regroupé sous le nom existant.
   const existing = await Vehicle.find({ guildId: interaction.guildId });
   const name = existing.find((vehicle) => vehicles.sameName(vehicle.name, rawName))?.name ?? rawName;
 
   try {
-    await Vehicle.create({ guildId: interaction.guildId, name, plate, nextServiceKm: km });
+    await Vehicle.create({ guildId: interaction.guildId, name, plate, nextServiceKm: km, tag });
   } catch (error) {
     if (!isDuplicate(error)) throw error;
     return interaction.reply(ephemeralText(`${EMOJI.ERREUR} La plaque \`${plate}\` est déjà enregistrée.`));
   }
-  logAction('BDD', `Création dans Vehicule-List : ${name} ${plate} (prochain entretien ${km} km) par ${who(interaction)}`);
+  logAction('BDD', `Création dans Vehicule-List : ${name} ${plate} (prochain entretien ${km} km${tag ? `, tag ${tag}` : ''}) par ${who(interaction)}`);
   return updateVehiclePanel(interaction, { page: Number(page), focus: name });
 }
 
@@ -125,15 +135,37 @@ const updatePlacePanel = async (interaction) => interaction.update(await places.
 const handlePlaceAddButton = (interaction) => interaction.showModal(places.buildAddPlaceModal());
 
 async function handlePlaceAddModal(interaction) {
-  const name = normalizeSpaces(interaction.fields.getTextInputValue(places.NAME_FIELD));
-  if (!name) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Renseigne le nom du lieu.`));
+  const { fields } = interaction;
+  const name = normalizeSpaces(fields.getTextInputValue(places.FIELDS.name));
+  const emoji = fields.getTextInputValue(places.FIELDS.emoji).replace(/\s+/g, '');
+  const weeklyMaxMinutes = places.parseDuration(fields.getTextInputValue(places.FIELDS.weekly));
+  const [when] = fields.getStringSelectValues(places.FIELDS.when);
+  const [visit] = fields.getStringSelectValues(places.FIELDS.visit);
+
+  let error = null;
+  if (!name) error = `${EMOJI.ERREUR} Renseigne le nom de l'entreprise / du lieu.`;
+  else if (!places.isEmoji(emoji)) error = `${EMOJI.ERREUR} « Emoji du lieu » : indique un seul émoji (ex : 🏦) ou un émoji du serveur au format \`<:nom:id>\`.`;
+  else if (weeklyMaxMinutes === null) error = `${EMOJI.ERREUR} « Temps max / semaine » : indique une durée, ex : 2h, 1h30 ou 45min (une semaine maximum).`;
+  else if (!places.WHEN_CHOICES.some((choice) => choice.value === when) || !places.VISIT_CHOICES.some((choice) => choice.value === visit)) {
+    error = `${EMOJI.ERREUR} Réponses invalides, réessaie.`;
+  }
+  if (error) return interaction.reply(ephemeralText(`${error}\nLe lieu n'a pas été ajouté.`));
+
   try {
-    await PatrolPlace.create({ guildId: interaction.guildId, name, nameKey: name.toLocaleLowerCase('fr') });
+    await PatrolPlace.create({
+      guildId: interaction.guildId,
+      name,
+      nameKey: name.toLocaleLowerCase('fr'),
+      emoji,
+      weeklyMaxMinutes,
+      when,
+      visitMaxMinutes: Number(visit),
+    });
   } catch (error) {
     if (!isDuplicate(error)) throw error;
     return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le lieu « ${name} » est déjà enregistré.`));
   }
-  logAction('BDD', `Création dans Lieu-Patrouille-List : ${name} par ${who(interaction)}`);
+  logAction('BDD', `Création dans Lieu-Patrouille-List : ${emoji} ${name} (${when}, ${weeklyMaxMinutes} min / semaine, ${visit} min / passage) par ${who(interaction)}`);
   return updatePlacePanel(interaction);
 }
 
@@ -195,6 +227,18 @@ async function handleSeparatorDeleteModal(interaction) {
   return updateSeparatorPanel(interaction);
 }
 
+async function handleSeparatorTextButton(interaction) {
+  return interaction.showModal(separators.buildSeparatorTextModal(await separators.getSeparatorText(interaction.guildId)));
+}
+
+async function handleSeparatorTextModal(interaction) {
+  const value = interaction.fields.getTextInputValue(separators.TEXT_FIELD).trim();
+  if (!value) return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le texte ne peut pas être vide.`));
+  await SeparatorText.findOneAndUpdate({ guildId: interaction.guildId }, { $set: { text: value } }, { upsert: true });
+  logAction('BDD', `Texte des séparateurs modifié par ${who(interaction)} (${value.length} caractères)`);
+  return updateSeparatorPanel(interaction);
+}
+
 module.exports = {
   handleMenuPlaces,
   handleMenuVehicles,
@@ -216,4 +260,6 @@ module.exports = {
   handleSeparatorAddModal,
   handleSeparatorDeleteButton,
   handleSeparatorDeleteModal,
+  handleSeparatorTextButton,
+  handleSeparatorTextModal,
 };

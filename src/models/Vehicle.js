@@ -10,6 +10,8 @@ const vehicleSchema = new Schema(
     plate: { type: String, required: true },
     /** Kilométrage du prochain entretien. */
     nextServiceKm: { type: Number, required: true },
+    /** Tag (« atm » : utilisé seulement pour les sessions ATM, proposé dans /atm), null si aucun. */
+    tag: { type: String, default: null },
   },
   { timestamps: true },
 );

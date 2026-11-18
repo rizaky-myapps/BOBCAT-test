@@ -32,7 +32,14 @@ const GROUP_CHARS = 3300;
 /** « Modifier : <nom> » : jusqu'à 4 listes de 25 plaques (+ le kilométrage : 5 composants par modal). */
 const MAX_EDIT_SELECTS = 4;
 
-const FIELDS = { name: 'nom', plate: 'plaque', km: 'kilometrage' };
+const FIELDS = { name: 'nom', otherName: 'nom_autre', plate: 'plaque', km: 'kilometrage', tag: 'tag' };
+
+/** « Autre » dans la liste des noms : nouveau nom saisi dans le champ texte. */
+const NAME_OTHER = '__autre__';
+
+/** Tags d'un véhicule. */
+const TAGS = [{ value: 'atm', label: 'ATM', description: 'Utilisé seulement pour les sessions ATM' }];
+const tagLabel = (value) => TAGS.find((tag) => tag.value === value)?.label ?? null;
 const PLATE_FIELDS = Array.from({ length: MAX_EDIT_SELECTS }, (_, i) => `${FIELDS.plate}_${i + 1}`);
 
 /* ------------------------------------------------------------------ */
@@ -84,7 +91,8 @@ function groupText(group) {
   const lines = [`### ${group.name}`];
   let chars = lines[0].length;
   for (const [index, vehicle] of group.vehicles.entries()) {
-    const line = `> \`${vehicle.plate}\` • Prochain entretien : **${formatKm(vehicle.nextServiceKm)}**`;
+    const tag = tagLabel(vehicle.tag);
+    const line = `> \`${vehicle.plate}\` • Prochain entretien : **${formatKm(vehicle.nextServiceKm)}**${tag ? ` • Tag : ${tag}` : ''}`;
     // Limite de caractères d'un message Discord (seulement si un type compte des dizaines de véhicules).
     if (chars + line.length > GROUP_CHARS) {
       lines.push(`> … et ${group.vehicles.length - index} autre(s)`);
@@ -164,19 +172,45 @@ const kmField = (value) =>
     value: value === undefined ? undefined : String(value),
   });
 
-/** « Ajouter un véhicule » : nom, plaque, kilométrage du prochain entretien. */
-const buildAddModal = (page) =>
-  new ModalBuilder()
+/**
+ * « Ajouter un véhicule » : nom (liste des noms déjà enregistrés + « Autre » avec un champ texte),
+ * plaque, kilométrage du prochain entretien et tag (facultatif).
+ * @param {string[]} names Noms de véhicule déjà enregistrés (triés).
+ */
+function buildAddModal(page, names) {
+  const nameChoices = [
+    ...names.slice(0, MAX_OPTIONS - 1).map((name) => ({ label: name, value: name })),
+    { label: 'Autre', value: NAME_OTHER, description: 'Nouveau nom, à écrire dans le champ suivant', default: !names.length },
+  ];
+  return new ModalBuilder()
     .setCustomId(`veh:addsub:${page}`)
     .setTitle('Ajouter un véhicule')
     .addLabelComponents(
-      textField('Nom du véhicule', FIELDS.name, { placeholder: 'Ex : Buffalo', maxLength: MAX_NAME_LENGTH }),
+      new LabelBuilder().setLabel('Nom du véhicule').setStringSelectMenuComponent(
+        new StringSelectMenuBuilder().setCustomId(FIELDS.name).setPlaceholder('Sélectionne le nom du véhicule').addOptions(nameChoices),
+      ),
+      textField('Nom du véhicule (si « Autre »)', FIELDS.otherName, {
+        description: 'Uniquement si « Autre » est sélectionné.',
+        placeholder: 'Ex : Buffalo',
+        maxLength: MAX_NAME_LENGTH,
+        required: false,
+      }),
       textField("Plaque d'immatriculation", FIELDS.plate, {
         description: '8 caractères max (lettres, chiffres, espaces).',
         maxLength: MAX_PLATE_LENGTH,
       }),
       kmField(),
+      new LabelBuilder().setLabel('Tag').setStringSelectMenuComponent(
+        new StringSelectMenuBuilder()
+          .setCustomId(FIELDS.tag)
+          .setPlaceholder('Aucun tag')
+          .setRequired(false)
+          .setMinValues(0)
+          .setMaxValues(1)
+          .addOptions(TAGS),
+      ),
     );
+}
 
 /**
  * « Modifier : <nom> » : plaque (véhicules de ce type) et kilométrage du prochain entretien.
@@ -236,6 +270,8 @@ module.exports = {
   FIELDS,
   KM_ERROR,
   MAX_NAME_LENGTH,
+  NAME_OTHER,
+  TAGS,
   buildAddModal,
   buildDeleteVehicleModal,
   buildEditModal,

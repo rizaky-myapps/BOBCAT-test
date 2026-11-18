@@ -6,7 +6,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { CANCEL_REASONS, MAX_MALLETTES, TENUES, VEHICLES, VEHICLE_OTHER } = require('./constants');
+const { CANCEL_REASONS, MAX_MALLETTES, TENUES, VEHICLE_OTHER } = require('./constants');
 const { FIELDS, selectLabel, truncate, vehicleOtherInput } = require('./modals');
 
 const MALLETTE_CHOICES = Array.from({ length: MAX_MALLETTES }, (_, i) => ({
@@ -138,7 +138,8 @@ function buildReplacePickModal(session, options, max) {
  * @param {{ radios: object[], vehicles: object[] }} choices Radios et véhicules encore disponibles à cette heure-là.
  */
 function buildSessionInfoModal(session, choices) {
-  const preset = VEHICLES.find((vehicle) => vehicle.value !== VEHICLE_OTHER && vehicle.label === session.vehicle);
+  // Véhicule ATM de la liste : pré-sélectionné ; sinon « Autre » avec sa plaque.
+  const preset = choices.vehicles.find((vehicle) => vehicle.value !== VEHICLE_OTHER && vehicle.value === session.vehicle);
   return new ModalBuilder()
     .setCustomId(`atm:pinfosub:${session._id}`)
     .setTitle('Informations de la session')

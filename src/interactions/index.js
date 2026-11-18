@@ -91,6 +91,8 @@ const componentHandlers = {
   'sep:addsub': gestion.handleSeparatorAddModal,
   'sep:del': gestion.handleSeparatorDeleteButton,
   'sep:delsub': gestion.handleSeparatorDeleteModal,
+  'sep:text': gestion.handleSeparatorTextButton,
+  'sep:textsub': gestion.handleSeparatorTextModal,
 };
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));

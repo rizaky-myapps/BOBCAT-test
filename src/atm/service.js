@@ -2,6 +2,7 @@ const { ButtonBuilder, ButtonStyle } = require('discord.js');
 const { isValidObjectId } = require('mongoose');
 const AtmSession = require('../models/AtmSession');
 const AtmSessionBasket = require('../models/AtmSessionBasket');
+const Vehicle = require('../models/Vehicle');
 const { config } = require('../config');
 const { renderSessionMessage } = require('./message');
 const {
@@ -10,9 +11,9 @@ const {
   PROGRAM_PUBLISH_BEFORE,
   RADIOS,
   SESSION_DURATION,
-  VEHICLES,
   VEHICLE_CAPACITY,
   VEHICLE_OTHER,
+  VEHICLE_OTHER_CHOICE,
 } = require('./constants');
 const { dayKey, formatDateTime, getDayBounds } = require('../utils/date');
 const { logAction } = require('../utils/logger');
@@ -20,8 +21,8 @@ const EMOJI = require('../emoji');
 
 /** Libellé du véhicule à partir de la valeur du menu (ou de la plaque saisie pour « Autre »). */
 function resolveVehicle(value, plate) {
-  if (value === VEHICLE_OTHER) return plate?.trim() || null;
-  return VEHICLES.find((vehicle) => vehicle.value === value)?.label ?? null;
+  if (value === VEHICLE_OTHER) return normalizeVehicle(plate) || null;
+  return value || null;
 }
 
 /**
@@ -191,13 +192,30 @@ async function getUsedResources(guildId, scheduledAt, excludeId = null) {
   };
 }
 
-/** Radios et véhicules encore disponibles (« Autre » reste toujours proposé). */
-function getAvailableChoices(used) {
+/**
+ * Véhicules proposés dans /atm : ceux de la base (/gestion → Véhicules) ayant le tag ATM, triés par nom.
+ * La valeur du menu est la plaque.
+ */
+async function getAtmVehicles(guildId) {
+  const vehicles = await Vehicle.find({ guildId, tag: 'atm' });
+  return vehicles
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base', numeric: true }) || a.plate.localeCompare(b.plate, 'fr', { numeric: true }))
+    .map((vehicle) => ({ value: vehicle.plate, label: `${vehicle.plate} (${vehicle.name})` }));
+}
+
+/** Message affiché quand la plaque saisie pour « Autre » n'est pas celle d'un véhicule de la base. */
+const unknownPlateMessage = (plate) =>
+  `${EMOJI.ERREUR} La plaque \`${normalizeVehicle(plate)}\` n'est pas dans la liste des véhicules : vérifie que tu l'as bien écrite, sinon ce véhicule n'existe pas dans la base de données (/gestion → Véhicules).`;
+
+/** La plaque saisie pour « Autre » est-elle celle d'un véhicule de la base (/gestion → Véhicules) ? */
+const isKnownPlate = async (guildId, plate) => Boolean(await Vehicle.findOne({ guildId, plate: normalizeVehicle(plate) }));
+
+/** Radios et véhicules ATM encore disponibles (« Autre » reste toujours proposé ; 25 choix au maximum). */
+async function getAvailableChoices(guildId, used) {
+  const vehicles = (await getAtmVehicles(guildId)).filter((vehicle) => !used.vehicles.has(normalizeVehicle(vehicle.value)));
   return {
     radios: RADIOS.filter((radio) => !used.radios.has(radio.value)),
-    vehicles: VEHICLES.filter(
-      (vehicle) => vehicle.value === VEHICLE_OTHER || !used.vehicles.has(normalizeVehicle(vehicle.label)),
-    ),
+    vehicles: [...vehicles.slice(0, 24), VEHICLE_OTHER_CHOICE],
   };
 }
 
@@ -340,6 +358,9 @@ module.exports = {
   checkSessionDate,
   getUsedResources,
   getAvailableChoices,
+  getAtmVehicles,
+  isKnownPlate,
+  unknownPlateMessage,
   isVehicleUsed,
   canManageSession,
   findTodaySessionsForUser,

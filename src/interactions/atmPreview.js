@@ -2,23 +2,26 @@ const { isValidObjectId } = require('mongoose');
 const AtmDraft = require('../models/AtmDraft');
 const Supervisor = require('../models/Supervisor');
 const { config } = require('../config');
-const { MIN_POST_DELAY, PROGRAM_THRESHOLD, RADIOS, TENUES, VEHICLES, VEHICLE_OTHER } = require('../atm/constants');
+const { MIN_POST_DELAY, PROGRAM_THRESHOLD, RADIOS, TENUES, VEHICLE_OTHER } = require('../atm/constants');
 const { FIELDS, buildInfoModal, buildSupervisorChoiceModal, truncate } = require('../atm/modals');
 const { getPickerState, isSlotAvailable, toSlot } = require('../atm/datePicker');
 const { isDraftComplete, isRequestPending, renderPreview, renderSendConfirm } = require('../atm/preview');
 const {
   checkSessionDate,
   findConflictingSessions,
+  getAtmVehicles,
   getAvailableChoices,
   getConfirmedSupervisorId,
   getPlateError,
   getUsedResources,
   isVehicleUsed,
   isCoAtm,
+  isKnownPlate,
   programSession,
   publishSession,
   resolveVehicle,
   sessionUrl,
+  unknownPlateMessage,
 } = require('../atm/service');
 const { rememberPreview, sendSupervisionRequest } = require('../atm/supervision');
 const { toUnix } = require('../utils/date');
@@ -128,7 +131,7 @@ async function handleInfoButton(interaction, [id]) {
   if (!draft.scheduledAt) return interaction.reply(ephemeralText(NO_DATE_MESSAGE));
 
   // Les radios et véhicules utilisés par une autre session à la même heure ne sont pas proposés.
-  const choices = getAvailableChoices(await getUsedResources(draft.guildId, draft.scheduledAt));
+  const choices = await getAvailableChoices(draft.guildId, await getUsedResources(draft.guildId, draft.scheduledAt));
   if (!choices.radios.length) return interaction.reply(ephemeralText(NO_RADIO_MESSAGE));
   return interaction.showModal(buildInfoModal(draft, choices));
 }
@@ -143,16 +146,22 @@ async function handleInfoModal(interaction, [id]) {
   const [radio] = fields.getStringSelectValues(FIELDS.radio);
   const [vehicle] = fields.getStringSelectValues(FIELDS.vehicle);
   const rawPlate = fields.getTextInputValue(FIELDS.vehicleOther);
-  const plate = rawPlate.trim();
+  const isOther = vehicle === VEHICLE_OTHER;
+  const plate = isOther ? resolveVehicle(vehicle, rawPlate) ?? '' : '';
 
   if (!draft.scheduledAt) return interaction.reply(ephemeralText(NO_DATE_MESSAGE));
   const used = await getUsedResources(draft.guildId, draft.scheduledAt);
-  const choices = getAvailableChoices(used);
-  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || !isIn(VEHICLES, vehicle)) {
+  const choices = await getAvailableChoices(draft.guildId, used);
+  const atmVehicles = await getAtmVehicles(draft.guildId);
+  if (!isIn(TENUES, tenue) || !isIn(RADIOS, radio) || (!isOther && !isIn(atmVehicles, vehicle))) {
     return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Réponses invalides, réessaie.`));
   }
-  const plateError = vehicle === VEHICLE_OTHER ? getPlateError(rawPlate) : null;
+  const plateError = isOther ? getPlateError(rawPlate) : null;
   if (plateError) return interaction.reply(ephemeralText(`${plateError} Aucune modification enregistrée.`));
+  // « Autre » : la plaque doit être celle d'un véhicule de la base (/gestion → Véhicules).
+  if (isOther && !(await isKnownPlate(draft.guildId, rawPlate))) {
+    return interaction.reply(ephemeralText(`${unknownPlateMessage(rawPlate)} Aucune modification enregistrée.`));
+  }
   if (!isIn(choices.radios, radio) || !isIn(choices.vehicles, vehicle)) {
     return interaction.reply(
       ephemeralText(

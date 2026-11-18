@@ -20,11 +20,8 @@ const VEHICLE_OTHER = 'autre';
 /** Longueur maximale d'une plaque saisie pour le véhicule « Autre » (lettres, chiffres et espaces). */
 const MAX_PLATE_LENGTH = 8;
 
-const VEHICLES = [
-  { value: 'zjr325', label: 'ZJR 325' },
-  { value: 'abc123', label: 'ABC 123' },
-  { value: VEHICLE_OTHER, label: 'Autre' },
-];
+/** « Autre » : véhicule de la base (/gestion → Véhicules) sans le tag ATM, dont on saisit la plaque. */
+const VEHICLE_OTHER_CHOICE = { value: VEHICLE_OTHER, label: 'Autre' };
 
 /** Statuts d'une session (affichés dans « Informations »). */
 const STATUSES = [
@@ -129,8 +126,8 @@ const findLabel = (list, value) => list.find((item) => item.value === value)?.la
 module.exports = {
   TENUES,
   RADIOS,
-  VEHICLES,
   VEHICLE_OTHER,
+  VEHICLE_OTHER_CHOICE,
   MAX_PLATE_LENGTH,
   STATUSES,
   CLOSED_STATUSES,
