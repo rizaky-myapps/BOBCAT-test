@@ -11,6 +11,7 @@ const {
 } = require('discord.js');
 const SeparatorChannel = require('../models/SeparatorChannel');
 const SeparatorText = require('../models/SeparatorText');
+const { messageUrl } = require('./separatorJob');
 const { separator } = require('../utils/v2');
 const { MAX_OPTIONS, button, buildDeleteModal, collator, panelMessage, section, text, truncate } = require('./ui');
 
@@ -27,9 +28,17 @@ const getSeparatorText = async (guildId) => (await SeparatorText.findOne({ guild
 async function getSeparatorChannels(guild) {
   const entries = await SeparatorChannel.find({ guildId: guild.id });
   return entries
-    .map((entry) => ({ id: entry.channelId, name: guild.channels?.cache.get(entry.channelId)?.name ?? entry.channelId }))
+    .map((entry) => ({
+      id: entry.channelId,
+      name: guild.channels?.cache.get(entry.channelId)?.name ?? entry.channelId,
+      lastMessageId: entry.lastMessageId,
+    }))
     .sort((a, b) => collator.compare(a.name, b.name));
 }
+
+/** Salon de la liste, avec le lien vers le dernier séparateur envoyé. */
+const channelLine = (guildId, channel) =>
+  `> - <#${channel.id}> : ${channel.lastMessageId ? messageUrl(guildId, channel.id, channel.lastMessageId) : 'aucun séparateur envoyé'}`;
 
 /**
  * Panneau « Séparateurs » : salons où le bot doit envoyer un message tous les dimanches à 23:59:59
@@ -47,12 +56,7 @@ async function renderSeparatorPanel(guild) {
     )
     .addSeparatorComponents(separator())
     .addTextDisplayComponents(
-      text(
-        [
-          channels.length ? channels.map((channel) => `> - <#${channel.id}>`).join('\n') : 'Aucun salon enregistré.',
-          "-# L'envoi automatique sera défini plus tard.",
-        ].join('\n'),
-      ),
+      text(channels.length ? channels.map((channel) => channelLine(guild.id, channel)).join('\n') : 'Aucun salon enregistré.'),
     )
     .addSeparatorComponents(separator())
     .addSectionComponents(

@@ -13,6 +13,7 @@ const { sendStartChecks } = require('./atm/startCheck');
 const { expirePendingRequests } = require('./atm/supervision');
 const { checkSupervisorRoles } = require('./atm/supervisorRoles');
 const { isDatabaseConnected, isNetworkError } = require('./database/mongoose');
+const { scheduleSeparators } = require('./gestion/separatorJob');
 const { logAction } = require('./utils/logger');
 
 /** Supprime les brouillons non envoyés créés il y a plus de 5h. */
@@ -56,6 +57,8 @@ function startJobs(client) {
     await sendStartChecks(client);
     await cancelUnstartedSessions(client);
   });
+  // Séparateurs (/gestion) : tous les dimanches à 23:59:59.
+  scheduleSeparators(client);
 }
 
 module.exports = { startJobs, deleteExpiredDrafts };

@@ -135,56 +135,85 @@ const updatePlacePanel = async (interaction) => interaction.update(await places.
 const handlePlaceAddButton = (interaction) => interaction.showModal(places.buildAddPlaceModal());
 
 async function handlePlaceAddModal(interaction) {
-  const { fields } = interaction;
-  const name = normalizeSpaces(fields.getTextInputValue(places.FIELDS.name));
-  const emoji = fields.getTextInputValue(places.FIELDS.emoji).replace(/\s+/g, '');
-  const weeklyMaxMinutes = places.parseDuration(fields.getTextInputValue(places.FIELDS.weekly));
-  const [when] = fields.getStringSelectValues(places.FIELDS.when);
-  const [visit] = fields.getStringSelectValues(places.FIELDS.visit);
-
-  let error = null;
-  if (!name) error = `${EMOJI.ERREUR} Renseigne le nom de l'entreprise / du lieu.`;
-  else if (!places.isEmoji(emoji)) error = `${EMOJI.ERREUR} « Emoji du lieu » : indique un seul émoji (ex : 🏦) ou un émoji du serveur au format \`<:nom:id>\`.`;
-  else if (weeklyMaxMinutes === null) error = `${EMOJI.ERREUR} « Temps max / semaine » : indique une durée, ex : 2h, 1h30 ou 45min (une semaine maximum).`;
-  else if (!places.WHEN_CHOICES.some((choice) => choice.value === when) || !places.VISIT_CHOICES.some((choice) => choice.value === visit)) {
-    error = `${EMOJI.ERREUR} Réponses invalides, réessaie.`;
-  }
+  const { values, error } = places.readPlaceFields(interaction.fields);
   if (error) return interaction.reply(ephemeralText(`${error}\nLe lieu n'a pas été ajouté.`));
-
   try {
-    await PatrolPlace.create({
-      guildId: interaction.guildId,
-      name,
-      nameKey: name.toLocaleLowerCase('fr'),
-      emoji,
-      weeklyMaxMinutes,
-      when,
-      visitMaxMinutes: Number(visit),
-    });
-  } catch (error) {
-    if (!isDuplicate(error)) throw error;
-    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le lieu « ${name} » est déjà enregistré.`));
+    await PatrolPlace.create({ guildId: interaction.guildId, ...values });
+  } catch (createError) {
+    if (!isDuplicate(createError)) throw createError;
+    return interaction.reply(ephemeralText(`${EMOJI.ERREUR} Le lieu « ${values.name} » est déjà enregistré.`));
   }
-  logAction('BDD', `Création dans Lieu-Patrouille-List : ${emoji} ${name} (${when}, ${weeklyMaxMinutes} min / semaine, ${visit} min / passage) par ${who(interaction)}`);
+  logAction('BDD', `Création dans Lieu-Patrouille-List : ${values.emoji} ${values.name} (${values.when}, ${values.weeklyMaxMinutes} min / semaine, ${values.visitMaxMinutes ?? 'pas de limite'} par passage) par ${who(interaction)}`);
   return updatePlacePanel(interaction);
 }
 
-async function handlePlaceDeleteButton(interaction) {
-  const all = await PatrolPlace.find({ guildId: interaction.guildId });
-  if (!all.length) return updatePlacePanel(interaction);
-  return interaction.showModal(places.buildDeletePlaceModal(all));
+/**
+ * Bouton ✏️ d'une catégorie : nouveau message avec la liste des entreprises de cette catégorie.
+ * Le panneau est retenu pour être mis à jour après une modification.
+ */
+async function handlePlacePen(interaction, [categoryValue]) {
+  await interaction.deferUpdate();
+  const key = places.rememberPanel(interaction);
+  return interaction.followUp(ephemeralPanel(await places.renderPenMessage(interaction.guildId, categoryValue, key)));
 }
 
-async function handlePlaceDeleteModal(interaction) {
+/** Met à jour le message ✏️ (avec un message) et le panneau « Lieux de patrouille ». */
+async function updatePenMessage(interaction, categoryValue, key, notice) {
+  await interaction.update(await places.renderPenMessage(interaction.guildId, categoryValue, key, notice));
+  await places.refreshPanel(key, interaction.guildId);
+}
+
+/** Entreprise choisie dans la liste du message ✏️ : modal de modification. */
+async function handlePlacePick(interaction, [categoryValue, key]) {
+  const [placeId] = interaction.values;
+  const place = isValidObjectId(placeId) ? await PatrolPlace.findOne({ _id: placeId, guildId: interaction.guildId }) : null;
+  if (!place) return updatePenMessage(interaction, categoryValue, key, `${EMOJI.ERREUR} Ce lieu n'existe plus : la liste a été mise à jour.`);
+  return interaction.showModal(places.buildEditPlaceModal(place, categoryValue, key));
+}
+
+async function handlePlaceEditModal(interaction, [placeId, categoryValue, key]) {
+  const { values, error } = places.readPlaceFields(interaction.fields);
+  if (error) return interaction.reply(ephemeralText(`${error}\nLe lieu n'a pas été modifié.`));
+  const duplicateMessage = `${EMOJI.ERREUR} Un autre lieu s'appelle déjà « ${values.name} ». Le lieu n'a pas été modifié.`;
+  const sameName = await PatrolPlace.findOne({ guildId: interaction.guildId, nameKey: values.nameKey });
+  if (sameName && String(sameName._id) !== placeId) {
+    return interaction.reply(ephemeralText(duplicateMessage));
+  }
+  let place;
+  try {
+    place = isValidObjectId(placeId)
+      ? await PatrolPlace.findOneAndUpdate({ _id: placeId, guildId: interaction.guildId }, { $set: values }, { returnDocument: 'after' })
+      : null;
+  } catch (updateError) {
+    if (!isDuplicate(updateError)) throw updateError;
+    return interaction.reply(ephemeralText(duplicateMessage));
+  }
+  if (!place) return updatePenMessage(interaction, categoryValue, key, `${EMOJI.ERREUR} Ce lieu n'existe plus : la liste a été mise à jour.`);
+  logAction('BDD', `Modification dans Lieu-Patrouille-List : ${place.emoji} ${place.name} (${place.when}, ${place.weeklyMaxMinutes} min / semaine, ${place.visitMaxMinutes ?? 'pas de limite'} par passage) par ${who(interaction)}`);
+  return updatePenMessage(interaction, categoryValue, key, `${EMOJI.SUCCES} « ${place.name} » modifié.`);
+}
+
+/** « Supprimer » du message ✏️ : lieux de la catégorie à cocher. */
+async function handlePlacePenDelete(interaction, [categoryValue, key]) {
+  const inCategory = (await PatrolPlace.find({ guildId: interaction.guildId })).filter(
+    (place) => places.categoryOf(place).value === categoryValue,
+  );
+  if (!inCategory.length) return updatePenMessage(interaction, categoryValue, key);
+  return interaction.showModal(places.buildDeletePlaceModal(inCategory, categoryValue, key));
+}
+
+async function handlePlacePenDeleteModal(interaction, [categoryValue, key]) {
   const ids = getDeleteSelection(interaction).filter(isValidObjectId);
+  let notice;
   if (ids.length) {
     const deleted = await PatrolPlace.find({ _id: { $in: ids }, guildId: interaction.guildId });
     await PatrolPlace.deleteMany({ _id: { $in: ids }, guildId: interaction.guildId });
     if (deleted.length) {
       logAction('BDD', `Suppression dans Lieu-Patrouille-List : ${deleted.map((p) => p.name).join(', ')} par ${who(interaction)}`);
+      notice = `${EMOJI.SUCCES} Supprimé(s) : ${deleted.map((p) => `« ${p.name} »`).join(', ')}.`;
     }
   }
-  return updatePlacePanel(interaction);
+  return updatePenMessage(interaction, categoryValue, key, notice);
 }
 
 /* ------------------------------------------------------------------ */
@@ -254,8 +283,11 @@ module.exports = {
   handleVehicleDeleteModal,
   handlePlaceAddButton,
   handlePlaceAddModal,
-  handlePlaceDeleteButton,
-  handlePlaceDeleteModal,
+  handlePlacePen,
+  handlePlacePick,
+  handlePlaceEditModal,
+  handlePlacePenDelete,
+  handlePlacePenDeleteModal,
   handleSeparatorAddButton,
   handleSeparatorAddModal,
   handleSeparatorDeleteButton,

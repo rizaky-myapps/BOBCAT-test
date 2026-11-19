@@ -5,6 +5,9 @@ const separatorChannelSchema = new Schema(
   {
     guildId: { type: String, required: true },
     channelId: { type: String, required: true },
+    /** Dernier séparateur envoyé par le bot dans ce salon (null si aucun). */
+    lastMessageId: { type: String, default: null },
+    lastSentAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
