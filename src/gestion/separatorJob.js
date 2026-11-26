@@ -3,7 +3,6 @@ const SeparatorText = require('../models/SeparatorText');
 const { config } = require('../config');
 const { isDatabaseConnected } = require('../database/mongoose');
 const { formatDate, formatDateTime, parseDateTime } = require('../utils/date');
-const { textMessage } = require('../utils/v2');
 const { logAction } = require('../utils/logger');
 
 /** Envoi tous les dimanches à 23:59:59 (fuseau du .env). */
@@ -54,7 +53,8 @@ async function sendSeparators(client) {
         logAction('Séparateurs', `#${channel.name} : le dernier message est déjà le séparateur, rien n'est reposté`);
         continue;
       }
-      const message = await channel.send(textMessage(text));
+      // Texte seul (contenu du message, sans composant) ; les mentions éventuelles ne notifient personne.
+      const message = await channel.send({ content: text, allowedMentions: { parse: [] } });
       await SeparatorChannel.updateOne({ _id: entry._id }, { $set: { lastMessageId: message.id, lastSentAt: new Date() } });
       logAction('Séparateurs', `Séparateur envoyé dans #${channel.name} : ${message.url}`);
     } catch (error) {
